@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex Phase 2 API Test",
+  "version": "1.0.0",
+  "description": "Tests chrome.storage, chrome.runtime, service worker, action popup, and chrome.tabs APIs",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

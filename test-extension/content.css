@@ -1,0 +1,14 @@
+#mobile-bex-test-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483647;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 14px;
+  padding: 8px 16px;
+  text-align: center;
+  font-family: sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}

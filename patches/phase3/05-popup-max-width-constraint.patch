@@ -1,0 +1,24 @@
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java
+index 2127b66caf..98cbbbbdd2 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java
+@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.toolbar.extensions;
+ import android.app.Activity;
+ import android.content.Context;
+ import android.content.res.Resources;
++import android.util.DisplayMetrics;
+ import android.graphics.Color;
+ import android.graphics.drawable.ColorDrawable;
+ import android.view.View;
+@@ -114,6 +115,11 @@ class ExtensionActionPopup implements Destroyable {
+         mPopupWindow.setElevation(
+                 resources.getDimensionPixelSize(R.dimen.extension_action_popup_elevation));
+ 
++        // Constrain popup to screen size for phone form factor.
++        DisplayMetrics dm = resources.getDisplayMetrics();
++        int margin = ViewUtils.dpToPx(mContext, 16);
++        mPopupWindow.setMaxWidth(dm.widthPixels - margin * 2);
++
+         // Set the content size to the minimum initially.
+         mPopupWindow.setDesiredContentSize(
+                 resources.getDimensionPixelSize(R.dimen.extension_action_popup_min_width),

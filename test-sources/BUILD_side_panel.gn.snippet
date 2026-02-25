@@ -1,0 +1,18 @@
+# Addition to chrome/browser/extensions/api/side_panel/BUILD.gn
+# Insert after the existing source_set("side_panel") block.
+
+test("side_panel_api_stub_unittest") {
+  sources = [ "side_panel_api_stub_unittest.cc" ]
+
+  deps = [
+    ":side_panel",
+    "//base",
+    "//base/test:test_support",
+    "//chrome/common/extensions/api",
+    "//chrome/test:test_support",
+    "//content/test:test_support",
+    "//extensions/browser",
+    "//extensions/browser:test_support",
+    "//testing/gtest",
+  ]
+}

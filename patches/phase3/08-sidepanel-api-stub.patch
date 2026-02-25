@@ -1,0 +1,198 @@
+diff --git a/chrome/browser/extensions/api/BUILD.gn b/chrome/browser/extensions/api/BUILD.gn
+index 4331010df3..3584e5373c 100644
+--- a/chrome/browser/extensions/api/BUILD.gn
++++ b/chrome/browser/extensions/api/BUILD.gn
+@@ -50,6 +50,7 @@ group("api_implementations") {
+     "//chrome/browser/extensions/api/processes",
+     "//chrome/browser/extensions/api/proxy",
+     "//chrome/browser/extensions/api/reading_list",
++    "//chrome/browser/extensions/api/side_panel",
+     "//chrome/browser/extensions/api/runtime",
+     "//chrome/browser/extensions/api/scripting",
+     "//chrome/browser/extensions/api/search",
+@@ -80,7 +81,6 @@ group("api_implementations") {
+       "//chrome/browser/extensions/api/resources_private",
+       "//chrome/browser/extensions/api/safe_browsing_private",
+       "//chrome/browser/extensions/api/settings_overrides",
+-      "//chrome/browser/extensions/api/side_panel",
+       "//chrome/browser/extensions/api/webrtc_desktop_capture_private",
+     ]
+ 
+diff --git a/chrome/browser/extensions/api/side_panel/BUILD.gn b/chrome/browser/extensions/api/side_panel/BUILD.gn
+index 7b1445036d..49eea48d7c 100644
+--- a/chrome/browser/extensions/api/side_panel/BUILD.gn
++++ b/chrome/browser/extensions/api/side_panel/BUILD.gn
+@@ -4,13 +4,18 @@
+ 
+ import("//extensions/buildflags/buildflags.gni")
+ 
+-assert(enable_extensions)
++assert(enable_extensions_core)
+ 
+ source_set("side_panel") {
+-  sources = [
+-    "side_panel_api.cc",
+-    "side_panel_api.h",
+-  ]
++  sources = [ "side_panel_api.h" ]
++
++  if (enable_extensions) {
++    # Desktop: full implementation with SidePanelService
++    sources += [ "side_panel_api.cc" ]
++  } else {
++    # Desktop Android: stub (no-op / defaults)
++    sources += [ "side_panel_api_stub.cc" ]
++  }
+ 
+   public_deps = [ "//extensions/browser" ]
+ 
+diff --git a/chrome/common/extensions/BUILD.gn b/chrome/common/extensions/BUILD.gn
+index 097d660d1d..e8010cf101 100644
+--- a/chrome/common/extensions/BUILD.gn
++++ b/chrome/common/extensions/BUILD.gn
+@@ -11,6 +11,7 @@ source_set("extensions") {
+   # The files that can be included from other modules.
+   public = [
+     "api/notifications/notification_style.h",
++    "api/side_panel/side_panel_info.h",
+     "api/omnibox/omnibox_handler.h",
+     "api/storage/storage_schema_manifest_handler.h",
+     "chrome_extensions_client.h",
+@@ -32,6 +33,7 @@ source_set("extensions") {
+   sources = [
+     "api/notifications/notification_style.cc",
+     "api/omnibox/omnibox_handler.cc",
++    "api/side_panel/side_panel_info.cc",
+     "api/storage/storage_schema_manifest_handler.cc",
+     "chrome_extensions_api_provider.cc",
+     "chrome_extensions_api_provider.h",
+@@ -97,12 +99,10 @@ source_set("extensions") {
+   if (enable_extensions) {
+     public += [
+       "api/file_browser_handlers/file_browser_handler.h",
+-      "api/side_panel/side_panel_info.h",
+     ]
+ 
+     sources += [
+       "api/file_browser_handlers/file_browser_handler.cc",
+-      "api/side_panel/side_panel_info.cc",
+     ]
+   }
+ 
+diff --git a/chrome/common/extensions/api/api_sources.gni b/chrome/common/extensions/api/api_sources.gni
+index 1bb3d09f4b..94feaaa9ab 100644
+--- a/chrome/common/extensions/api/api_sources.gni
++++ b/chrome/common/extensions/api/api_sources.gni
+@@ -36,6 +36,7 @@ schema_sources_ = [
+   "scripting.idl",
+   "search.idl",
+   "sessions.json",
++  "side_panel.idl",
+   "tab_capture.idl",
+   "tab_groups.json",
+   "tabs.json",
+@@ -91,7 +92,6 @@ if (enable_extensions) {
+     "resources_private.idl",
+     "safe_browsing_private.idl",
+     "settings_private.idl",
+-    "side_panel.idl",
+     "system_private.json",
+ 
+     # Despite the name, these APIs do not rely on any WebRTC-specific bits and
+diff --git a/chrome/common/extensions/chrome_manifest_handlers.cc b/chrome/common/extensions/chrome_manifest_handlers.cc
+index af08903251..6ad8ee8967 100644
+--- a/chrome/common/extensions/chrome_manifest_handlers.cc
++++ b/chrome/common/extensions/chrome_manifest_handlers.cc
+@@ -17,7 +17,7 @@
+ #include "extensions/buildflags/buildflags.h"
+ #include "extensions/common/manifest_handler_registry.h"
+ 
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
++#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+ #include "chrome/common/extensions/api/side_panel/side_panel_info.h"
+ #endif
+ 
+@@ -44,7 +44,7 @@ void RegisterChromeManifestHandlers() {
+   registry->RegisterHandler(std::make_unique<StorageSchemaManifestHandler>());
+   registry->RegisterHandler(std::make_unique<ThemeHandler>());
+ 
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
++#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   registry->RegisterHandler(std::make_unique<SidePanelManifestHandler>());
+ #endif
+ 
+diff --git a/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc b/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
+new file mode 100644
+index 0000000000..483f5cc25d
+--- /dev/null
++++ b/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
+@@ -0,0 +1,69 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++// Stub implementation of the sidePanel API for desktop-android.
++// All functions are no-op or return sensible defaults.
++// The real implementation (side_panel_api.cc) depends on SidePanelService
++// which requires desktop browser_ui and is not available on Android.
++
++#include "chrome/browser/extensions/api/side_panel/side_panel_api.h"
++
++#include "chrome/common/extensions/api/side_panel.h"
++
++namespace extensions {
++
++SidePanelApiFunction::SidePanelApiFunction() = default;
++SidePanelApiFunction::~SidePanelApiFunction() = default;
++
++SidePanelService* SidePanelApiFunction::GetService() {
++  return nullptr;
++}
++
++ExtensionFunction::ResponseAction SidePanelApiFunction::Run() {
++  return RunFunction();
++}
++
++// setOptions -> no-op
++ExtensionFunction::ResponseAction SidePanelSetOptionsFunction::RunFunction() {
++  return RespondNow(NoArguments());
++}
++
++// getOptions -> default (enabled: true)
++ExtensionFunction::ResponseAction SidePanelGetOptionsFunction::RunFunction() {
++  api::side_panel::PanelOptions options;
++  options.enabled = true;
++  return RespondNow(WithArguments(options.ToValue()));
++}
++
++// setPanelBehavior -> no-op
++ExtensionFunction::ResponseAction
++SidePanelSetPanelBehaviorFunction::RunFunction() {
++  return RespondNow(NoArguments());
++}
++
++// getPanelBehavior -> default (openPanelOnActionClick: false)
++ExtensionFunction::ResponseAction
++SidePanelGetPanelBehaviorFunction::RunFunction() {
++  api::side_panel::PanelBehavior behavior;
++  behavior.open_panel_on_action_click = false;
++  return RespondNow(WithArguments(behavior.ToValue()));
++}
++
++// open -> no-op (could open as tab in the future)
++ExtensionFunction::ResponseAction SidePanelOpenFunction::RunFunction() {
++  return RespondNow(NoArguments());
++}
++
++// getLayout -> default
++ExtensionFunction::ResponseAction SidePanelGetLayoutFunction::RunFunction() {
++  api::side_panel::PanelLayout layout;
++  return RespondNow(WithArguments(layout.ToValue()));
++}
++
++// close -> no-op
++ExtensionFunction::ResponseAction SidePanelCloseFunction::RunFunction() {
++  return RespondNow(NoArguments());
++}
++
++}  // namespace extensions

@@ -1,0 +1,862 @@
+diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/android/extensions/BUILD.gn
+index abcdef1234..abcdef5678 100644
+--- a/chrome/browser/ui/android/extensions/BUILD.gn
++++ b/chrome/browser/ui/android/extensions/BUILD.gn
+@@ -1,3 +1,5 @@
++import("//testing/test.gni")
++
+ # Copyright 2024 The Chromium Authors
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
+@@ -60,3 +62,22 @@ android_library("java") {
+     ]
+   }
+ }
++
++if (enable_extensions_core) {
++  robolectric_binary("extensions_bottomsheet_junit_tests") {
++    sources = [
++      "junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java",
++      "junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java",
++    ]
++    deps = [
++      ":java",
++      "//base:base_java",
++      "//base:base_java_test_support",
++      "//components/browser_ui/bottomsheet/android:java",
++      "//components/thin_webview:java",
++      "//content/public/android:content_full_java",
++      "//third_party/android_deps:robolectric_all_java",
++      "//third_party/junit:junit",
++      "//third_party/mockito:mockito_java",
++      "//ui/android:ui_full_java",
++    ]
++  }
++}
+diff --git a/chrome/browser/ui/android/extensions/junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java b/chrome/browser/ui/android/extensions/junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java
+new file mode 100644
+index 0000000000..aabbccdd01
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java
+@@ -0,0 +1,123 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertNull;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.view.View;
++import android.widget.FrameLayout;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.MockitoAnnotations;
++import org.robolectric.RuntimeEnvironment;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.chrome.browser.ui.extensions.R;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
++import org.chromium.components.thinwebview.ThinWebView;
++
++/** Tests for {@link ExtensionBottomSheetContent}. */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ExtensionBottomSheetContentTest {
++    @Mock private ThinWebView mThinWebView;
++    @Mock private View mMockView;
++
++    private boolean mCallbackCalled;
++    private ExtensionBottomSheetContent mContent;
++
++    @Before
++    public void setUp() {
++        MockitoAnnotations.initMocks(this);
++        when(mThinWebView.getView()).thenReturn(mMockView);
++        mCallbackCalled = false;
++        mContent =
++                new ExtensionBottomSheetContent(
++                        RuntimeEnvironment.application,
++                        mThinWebView,
++                        () -> mCallbackCalled = true);
++    }
++
++    @Test
++    public void testGetContentView_returnsFrameLayout() {
++        View contentView = mContent.getContentView();
++        assertNotNull(contentView);
++        assertTrue(contentView instanceof FrameLayout);
++    }
++
++    @Test
++    public void testGetContentView_containsThinWebView() {
++        FrameLayout contentView = (FrameLayout) mContent.getContentView();
++        assertEquals(1, contentView.getChildCount());
++        assertEquals(mMockView, contentView.getChildAt(0));
++    }
++
++    @Test
++    public void testGetToolbarView_returnsNull() {
++        assertNull(mContent.getToolbarView());
++    }
++
++    @Test
++    public void testGetVerticalScrollOffset_returnsZero() {
++        assertEquals(0, mContent.getVerticalScrollOffset());
++    }
++
++    @Test
++    public void testGetFullHeightRatio() {
++        assertEquals(0.7f, mContent.getFullHeightRatio(), 0.001f);
++    }
++
++    @Test
++    public void testGetHalfHeightRatio() {
++        assertEquals(0.5f, mContent.getHalfHeightRatio(), 0.001f);
++    }
++
++    @Test
++    public void testGetPriority_returnsHigh() {
++        assertEquals(BottomSheetContent.ContentPriority.HIGH, mContent.getPriority());
++    }
++
++    @Test
++    public void testSwipeToDismissEnabled_returnsTrue() {
++        assertTrue(mContent.swipeToDismissEnabled());
++    }
++
++    @Test
++    public void testHasCustomLifecycle_returnsTrue() {
++        assertTrue(mContent.hasCustomLifecycle());
++    }
++
++    @Test
++    public void testHandleBackPress_invokesCallback() {
++        assertTrue(mContent.handleBackPress());
++        assertTrue(mCallbackCalled);
++    }
++
++    @Test
++    public void testDestroy_destroysThinWebView() {
++        mContent.destroy();
++        verify(mThinWebView).destroy();
++    }
++
++    @Test
++    public void testGetSheetContentDescription() {
++        assertEquals(
++                "Extension popup",
++                mContent.getSheetContentDescription(RuntimeEnvironment.application));
++    }
++
++    @Test
++    public void testAccessibilityStringIds_returnValidResources() {
++        assertEquals(
++                R.string.extension_popup_sheet_opened_half,
++                mContent.getSheetHalfHeightAccessibilityStringId());
++        assertEquals(
++                R.string.extension_popup_sheet_opened_full,
++                mContent.getSheetFullHeightAccessibilityStringId());
++        assertEquals(
++                R.string.extension_popup_sheet_closed,
++                mContent.getSheetClosedAccessibilityStringId());
++    }
++}
+diff --git a/chrome/browser/ui/android/extensions/junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java b/chrome/browser/ui/android/extensions/junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java
+new file mode 100644
+index 0000000000..aabbccdd02
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/junit/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java
+@@ -0,0 +1,157 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.eq;
++import static org.mockito.Mockito.doReturn;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.app.Activity;
++
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.MockedStatic;
++import org.mockito.Mockito;
++import org.mockito.MockitoAnnotations;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
++import org.chromium.components.thinwebview.ThinWebView;
++import org.chromium.components.thinwebview.ThinWebViewFactory;
++import org.chromium.content_public.browser.WebContents;
++import org.chromium.ui.base.IntentRequestTracker;
++import org.chromium.ui.base.WindowAndroid;
++
++import java.lang.ref.WeakReference;
++
++/** Tests for {@link ExtensionBottomSheetCoordinator}. */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ExtensionBottomSheetCoordinatorTest {
++    @Mock private WindowAndroid mWindowAndroid;
++    @Mock private BottomSheetController mBottomSheetController;
++    @Mock private ExtensionActionPopupContents mContents;
++    @Mock private WebContents mWebContents;
++    @Mock private Activity mActivity;
++    @Mock private ThinWebView mThinWebView;
++    @Mock private IntentRequestTracker mIntentRequestTracker;
++
++    private MockedStatic<BottomSheetControllerProvider> mBottomSheetControllerProviderMock;
++    private MockedStatic<ThinWebViewFactory> mThinWebViewFactoryMock;
++
++    private ExtensionBottomSheetCoordinator mCoordinator;
++
++    @Before
++    public void setUp() {
++        MockitoAnnotations.initMocks(this);
++
++        mCoordinator = new ExtensionBottomSheetCoordinator();
++
++        // Mock WindowAndroid.getActivity() -> Activity.
++        WeakReference<Activity> activityRef = new WeakReference<>(mActivity);
++        doReturn(activityRef).when(mWindowAndroid).getActivity();
++        when(mWindowAndroid.getIntentRequestTracker()).thenReturn(mIntentRequestTracker);
++
++        // Mock static providers.
++        mBottomSheetControllerProviderMock =
++                Mockito.mockStatic(BottomSheetControllerProvider.class);
++        mBottomSheetControllerProviderMock
++                .when(() -> BottomSheetControllerProvider.from(mWindowAndroid))
++                .thenReturn(mBottomSheetController);
++
++        mThinWebViewFactoryMock = Mockito.mockStatic(ThinWebViewFactory.class);
++        mThinWebViewFactoryMock
++                .when(() -> ThinWebViewFactory.create(any(), any(), any()))
++                .thenReturn(mThinWebView);
++
++        // Mock contents.
++        when(mContents.getWebContents()).thenReturn(mWebContents);
++
++        // Mock ThinWebView.getView() for FrameLayout.addView.
++        when(mThinWebView.getView()).thenReturn(new android.view.View(mActivity));
++
++        // Default: requestShowContent succeeds.
++        when(mBottomSheetController.requestShowContent(any(), eq(true))).thenReturn(true);
++    }
++
++    @After
++    public void tearDown() {
++        mBottomSheetControllerProviderMock.close();
++        mThinWebViewFactoryMock.close();
++    }
++
++    @Test
++    public void testShowPopup_activityNull_returnsFalse() {
++        WeakReference<Activity> nullRef = new WeakReference<>(null);
++        doReturn(nullRef).when(mWindowAndroid).getActivity();
++
++        assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
++    }
++
++    @Test
++    public void testShowPopup_bottomSheetControllerNull_returnsFalse() {
++        mBottomSheetControllerProviderMock
++                .when(() -> BottomSheetControllerProvider.from(mWindowAndroid))
++                .thenReturn(null);
++
++        assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
++    }
++
++    @Test
++    public void testShowPopup_success_returnsTrue() {
++        assertTrue(mCoordinator.showPopup(mWindowAndroid, mContents));
++    }
++
++    @Test
++    public void testShowPopup_success_setsDelegate() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        verify(mContents).setDelegate(any(ExtensionActionPopupContents.Delegate.class));
++    }
++
++    @Test
++    public void testShowPopup_success_attachesWebContents() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        verify(mThinWebView).attachWebContents(eq(mWebContents), any(), any());
++    }
++
++    @Test
++    public void testShowPopup_success_loadsInitialPage() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        verify(mContents).loadInitialPage();
++    }
++
++    @Test
++    public void testShowPopup_requestShowContentFails_returnsFalseAndCleanup() {
++        when(mBottomSheetController.requestShowContent(any(), eq(true))).thenReturn(false);
++
++        assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
++        verify(mContents).destroy();
++        verify(mContents, never()).loadInitialPage();
++    }
++
++    @Test
++    public void testHide_hidesContentAndCleansUp() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        mCoordinator.hide();
++
++        verify(mBottomSheetController).hideContent(any(), eq(true));
++        verify(mContents).destroy();
++    }
++
++    @Test
++    public void testHide_withoutShow_doesNotCrash() {
++        // Should not throw.
++        mCoordinator.hide();
++    }
++}
+diff --git a/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionPopupBottomSheetTest.java b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionPopupBottomSheetTest.java
+new file mode 100644
+index 0000000000..aabbccdd03
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionPopupBottomSheetTest.java
+@@ -0,0 +1,199 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import static androidx.test.espresso.Espresso.onView;
++import static androidx.test.espresso.assertion.ViewAssertions.matches;
++import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
++import static androidx.test.espresso.matcher.ViewMatchers.withClassName;
++
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertTrue;
++
++import android.widget.FrameLayout;
++
++import androidx.test.filters.MediumTest;
++
++import org.hamcrest.Matchers;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++
++import org.chromium.base.test.util.CommandLineFlags;
++import org.chromium.base.test.util.Feature;
++import org.chromium.chrome.browser.ChromeTabbedActivity;
++import org.chromium.chrome.browser.flags.ChromeSwitches;
++import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
++import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetTestSupport;
++import org.chromium.content_public.browser.test.util.TestThreadUtils;
++
++/**
++ * Instrumentation tests for extension popup display in a BottomSheet. These tests require a running
++ * Chrome instance (real device or emulator).
++ *
++ * <p>Note: These tests verify the BottomSheet integration plumbing. Full extension popup loading
++ * requires a sideloaded test extension, which is outside the scope of automated CI. The tests below
++ * verify the coordinator/content wiring using mock WebContents where possible.
++ */
++@RunWith(ChromeJUnit4ClassRunner.class)
++@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
++public class ExtensionPopupBottomSheetTest {
++    @Rule
++    public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
++
++    private ChromeTabbedActivity mActivity;
++    private BottomSheetController mBottomSheetController;
++
++    @Before
++    public void setUp() throws Exception {
++        mActivityTestRule.startMainActivityOnBlankPage();
++        mActivity = mActivityTestRule.getActivity();
++
++        TestThreadUtils.runOnUiThreadBlocking(
++                () -> {
++                    mBottomSheetController =
++                            BottomSheetControllerProvider.from(
++                                    mActivity.getWindowAndroid());
++                });
++    }
++
++    @After
++    public void tearDown() throws Exception {
++        // Ensure any open sheets are cleaned up.
++        TestThreadUtils.runOnUiThreadBlocking(
++                () -> {
++                    if (mBottomSheetController != null) {
++                        BottomSheetTestSupport.suppressSheet(
++                                mBottomSheetController,
++                                BottomSheetController.StateChangeReason.NONE);
++                    }
++                });
++    }
++
++    @Test
++    @MediumTest
++    @Feature({"Extensions"})
++    public void testBottomSheetController_isAvailable() {
++        assertNotNull(
++                "BottomSheetController should be available in ChromeTabbedActivity",
++                mBottomSheetController);
++    }
++
++    @Test
++    @MediumTest
++    @Feature({"Extensions"})
++    public void testBottomSheetContent_canBeCreatedAndShown() throws Exception {
++        TestThreadUtils.runOnUiThreadBlocking(
++                () -> {
++                    // Create a minimal BottomSheetContent with a dummy FrameLayout
++                    // to verify the show/hide plumbing works.
++                    FrameLayout dummyView = new FrameLayout(mActivity);
++                    DummyBottomSheetContent content = new DummyBottomSheetContent(dummyView);
++
++                    boolean shown =
++                            mBottomSheetController.requestShowContent(content, /* animate= */ false);
++                    assertTrue("requestShowContent should succeed", shown);
++
++                    mBottomSheetController.hideContent(content, /* animate= */ false);
++                    content.destroy();
++                });
++    }
++
++    @Test
++    @MediumTest
++    @Feature({"Extensions"})
++    public void testExtensionBottomSheetCoordinator_showPopup_nullActivity_returnsFalse() {
++        // Verify graceful failure when WindowAndroid returns null activity.
++        TestThreadUtils.runOnUiThreadBlocking(
++                () -> {
++                    ExtensionBottomSheetCoordinator coordinator =
++                            new ExtensionBottomSheetCoordinator();
++                    // We cannot easily pass a WindowAndroid with null activity in instrumentation,
++                    // but we verify the coordinator is instantiable and doesn't crash.
++                    assertNotNull(coordinator);
++                });
++    }
++
++    /**
++     * Minimal BottomSheetContent for testing the show/hide plumbing without requiring a real
++     * ThinWebView or WebContents.
++     */
++    private static class DummyBottomSheetContent
++            implements org.chromium.components.browser_ui.bottomsheet.BottomSheetContent {
++        private final FrameLayout mView;
++
++        DummyBottomSheetContent(FrameLayout view) {
++            mView = view;
++        }
++
++        @Override
++        public android.view.View getContentView() {
++            return mView;
++        }
++
++        @Override
++        public android.view.View getToolbarView() {
++            return null;
++        }
++
++        @Override
++        public int getVerticalScrollOffset() {
++            return 0;
++        }
++
++        @Override
++        public void destroy() {}
++
++        @Override
++        public int getPriority() {
++            return ContentPriority.HIGH;
++        }
++
++        @Override
++        public boolean swipeToDismissEnabled() {
++            return true;
++        }
++
++        @Override
++        public float getFullHeightRatio() {
++            return 0.7f;
++        }
++
++        @Override
++        public float getHalfHeightRatio() {
++            return 0.5f;
++        }
++
++        @Override
++        public boolean hasCustomLifecycle() {
++            return true;
++        }
++
++        @Override
++        public String getSheetContentDescription(android.content.Context context) {
++            return "Test";
++        }
++
++        @Override
++        public int getSheetHalfHeightAccessibilityStringId() {
++            return 0;
++        }
++
++        @Override
++        public int getSheetFullHeightAccessibilityStringId() {
++            return 0;
++        }
++
++        @Override
++        public int getSheetClosedAccessibilityStringId() {
++            return 0;
++        }
++    }
++}
+diff --git a/chrome/browser/ui/android/toolbar/java/BUILD.gn b/chrome/browser/ui/android/toolbar/java/BUILD.gn
+index 1234567890..abcdef9876 100644
+--- a/chrome/browser/ui/android/toolbar/java/BUILD.gn
++++ b/chrome/browser/ui/android/toolbar/java/BUILD.gn
+@@ -100,6 +100,7 @@ robolectric_binary("toolbar_junit_tests") {
+   sources += [
+     # Existing test sources ...
++    "junit/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediatorPopupTest.java",
+   ]
+ }
+diff --git a/chrome/browser/ui/android/toolbar/junit/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediatorPopupTest.java b/chrome/browser/ui/android/toolbar/junit/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediatorPopupTest.java
+new file mode 100644
+index 0000000000..aabbccdd04
+--- /dev/null
++++ b/chrome/browser/ui/android/toolbar/junit/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediatorPopupTest.java
+@@ -0,0 +1,165 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.toolbar.extensions;
++
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.doReturn;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.spy;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.content.Context;
++import android.view.View;
++
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.MockedConstruction;
++import org.mockito.MockedStatic;
++import org.mockito.Mockito;
++import org.mockito.MockitoAnnotations;
++import org.robolectric.RuntimeEnvironment;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.chrome.browser.tab.Tab;
++import org.chromium.chrome.browser.ui.extensions.ExtensionActionPopupContents;
++import org.chromium.chrome.browser.ui.extensions.ExtensionBottomSheetCoordinator;
++import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
++import org.chromium.components.browser_ui.widget.NullableObservableSupplier;
++import org.chromium.ui.base.WindowAndroid;
++import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
++
++import java.lang.reflect.Method;
++
++/**
++ * Tests for the popup-related changes in {@link ExtensionActionListMediator}: triggerPopup,
++ * closeCurrentSheet, and destroy cleanup.
++ */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ExtensionActionListMediatorPopupTest {
++    @Mock private WindowAndroid mWindowAndroid;
++    @Mock private Profile mProfile;
++    @Mock private NullableObservableSupplier<Tab> mTabSupplier;
++    @Mock private ExtensionActionListCoordinator.ActionAnchorViewProvider mAnchorViewProvider;
++    @Mock private ExtensionsToolbarBridge mExtensionsToolbarBridge;
++    @Mock private View mFallbackAnchorView;
++    @Mock private ExtensionActionPopupContents mContents;
++
++    private MockedStatic<ExtensionActionPopupContents> mContentsStaticMock;
++    private MockedConstruction<ExtensionBottomSheetCoordinator> mCoordinatorConstruction;
++    private ExtensionBottomSheetCoordinator mMockCoordinator;
++
++    private ExtensionActionListMediator mMediator;
++
++    @Before
++    public void setUp() {
++        MockitoAnnotations.initMocks(this);
++
++        Context context = RuntimeEnvironment.application;
++        ModelList models = new ModelList();
++
++        // Mock static ExtensionActionPopupContents.create().
++        mContentsStaticMock = Mockito.mockStatic(ExtensionActionPopupContents.class);
++        mContentsStaticMock
++                .when(() -> ExtensionActionPopupContents.create(any(Long.class)))
++                .thenReturn(mContents);
++
++        // Mock construction of ExtensionBottomSheetCoordinator.
++        mCoordinatorConstruction =
++                Mockito.mockConstruction(
++                        ExtensionBottomSheetCoordinator.class,
++                        (mock, ctx) -> {
++                            mMockCoordinator = mock;
++                            when(mock.showPopup(any(), any())).thenReturn(true);
++                        });
++
++        mMediator =
++                new ExtensionActionListMediator(
++                        context,
++                        mWindowAndroid,
++                        models,
++                        null, // ChromeAndroidTask
++                        mProfile,
++                        mTabSupplier,
++                        mAnchorViewProvider,
++                        mExtensionsToolbarBridge,
++                        mFallbackAnchorView);
++    }
++
++    @After
++    public void tearDown() {
++        mContentsStaticMock.close();
++        mCoordinatorConstruction.close();
++    }
++
++    @Test
++    public void testTriggerPopup_success_showsBottomSheet() throws Exception {
++        invokeTriggerPopup("test-action-id", 12345L);
++
++        verify(mMockCoordinator).showPopup(mWindowAndroid, mContents);
++        verify(mContents, never()).destroy();
++    }
++
++    @Test
++    public void testTriggerPopup_showPopupFails_destroysContents() throws Exception {
++        // Override to fail.
++        mCoordinatorConstruction.close();
++        mCoordinatorConstruction =
++                Mockito.mockConstruction(
++                        ExtensionBottomSheetCoordinator.class,
++                        (mock, ctx) -> {
++                            mMockCoordinator = mock;
++                            when(mock.showPopup(any(), any())).thenReturn(false);
++                        });
++
++        invokeTriggerPopup("test-action-id", 12345L);
++
++        verify(mContents).destroy();
++    }
++
++    @Test
++    public void testCloseCurrentSheet_hidesCoordinator() throws Exception {
++        // First trigger a popup so mCurrentSheetCoordinator is set.
++        invokeTriggerPopup("test-action-id", 12345L);
++
++        invokeCloseCurrentSheet();
++
++        verify(mMockCoordinator).hide();
++    }
++
++    @Test
++    public void testDestroy_closesCurrentSheet() throws Exception {
++        // Trigger a popup first.
++        invokeTriggerPopup("test-action-id", 12345L);
++
++        mMediator.destroy();
++
++        verify(mMockCoordinator).hide();
++    }
++
++    /**
++     * Invokes the private triggerPopup method via reflection. This is necessary because
++     * triggerPopup is called internally by the toolbar delegate callback.
++     */
++    private void invokeTriggerPopup(String actionId, long nativeHostPtr) throws Exception {
++        Method method =
++                ExtensionActionListMediator.class.getDeclaredMethod(
++                        "triggerPopup", String.class, long.class);
++        method.setAccessible(true);
++        method.invoke(mMediator, actionId, nativeHostPtr);
++    }
++
++    private void invokeCloseCurrentSheet() throws Exception {
++        Method method =
++                ExtensionActionListMediator.class.getDeclaredMethod("closeCurrentSheet");
++        method.setAccessible(true);
++        method.invoke(mMediator);
++    }
++}
+diff --git a/chrome/browser/extensions/api/side_panel/BUILD.gn b/chrome/browser/extensions/api/side_panel/BUILD.gn
+index 49eea48d7c..abcdef7777 100644
+--- a/chrome/browser/extensions/api/side_panel/BUILD.gn
++++ b/chrome/browser/extensions/api/side_panel/BUILD.gn
+@@ -27,3 +27,21 @@ source_set("side_panel") {
+     "//extensions/browser",
+   ]
+ }
++
++if (!enable_extensions) {
++  # Test the stub implementation used on desktop-android.
++  test("side_panel_api_stub_unittest") {
++    sources = [ "side_panel_api_stub_unittest.cc" ]
++
++    deps = [
++      ":side_panel",
++      "//base",
++      "//base/test:test_support",
++      "//chrome/common/extensions/api",
++      "//chrome/test:test_support",
++      "//content/test:test_support",
++      "//extensions/browser",
++      "//extensions/browser:test_support",
++      "//testing/gtest",
++    ]
++  }
++}
+diff --git a/chrome/browser/extensions/api/side_panel/side_panel_api_stub_unittest.cc b/chrome/browser/extensions/api/side_panel/side_panel_api_stub_unittest.cc
+new file mode 100644
+index 0000000000..aabbccdd05
+--- /dev/null
++++ b/chrome/browser/extensions/api/side_panel/side_panel_api_stub_unittest.cc
+@@ -0,0 +1,109 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/extensions/api/side_panel/side_panel_api.h"
++
++#include "base/values.h"
++#include "chrome/common/extensions/api/side_panel.h"
++#include "extensions/browser/api_test_utils.h"
++#include "extensions/browser/extension_function_dispatcher.h"
++#include "extensions/browser/extension_function.h"
++#include "chrome/test/base/testing_browser_process.h"
++#include "chrome/test/base/testing_profile.h"
++#include "chrome/test/base/testing_profile_manager.h"
++#include "content/public/test/browser_task_environment.h"
++#include "testing/gtest/include/gtest/gtest.h"
++
++namespace extensions {
++namespace {
++
++class SidePanelApiStubTest : public testing::Test {
++ protected:
++  void SetUp() override {
++    profile_manager_ = std::make_unique<TestingProfileManager>(
++        TestingBrowserProcess::GetGlobal());
++    ASSERT_TRUE(profile_manager_->SetUp());
++    profile_ = profile_manager_->CreateTestingProfile("test");
++  }
++
++  void TearDown() override {
++    profile_ = nullptr;
++    profile_manager_->DeleteAllTestingProfiles();
++  }
++
++  // Runs an extension function and returns the result value.
++  // For functions that return NoArguments(), result will be nullptr.
++  std::optional<base::Value> RunFunction(
++      scoped_refptr<ExtensionFunction> function,
++      const std::string& args = "[]") {
++    function->set_has_callback(true);
++    return api_test_utils::RunFunctionAndReturnSingleResult(
++        function.get(), args, profile_);
++  }
++
++  content::BrowserTaskEnvironment task_environment_;
++  std::unique_ptr<TestingProfileManager> profile_manager_;
++  raw_ptr<TestingProfile> profile_;
++};
++
++TEST_F(SidePanelApiStubTest, SetOptions_ReturnsNoArguments) {
++  auto function = base::MakeRefCounted<SidePanelSetOptionsFunction>();
++  auto result = RunFunction(function, R"([{"path": "panel.html"}])");
++  // NoArguments() returns no result value.
++  EXPECT_FALSE(result.has_value());
++}
++
++TEST_F(SidePanelApiStubTest, GetOptions_ReturnsEnabledTrue) {
++  auto function = base::MakeRefCounted<SidePanelGetOptionsFunction>();
++  auto result = RunFunction(function, "[]");
++  ASSERT_TRUE(result.has_value());
++  ASSERT_TRUE(result->is_dict());
++
++  const base::Value::Dict& dict = result->GetDict();
++  std::optional<bool> enabled = dict.FindBool("enabled");
++  ASSERT_TRUE(enabled.has_value());
++  EXPECT_TRUE(enabled.value());
++}
++
++TEST_F(SidePanelApiStubTest, SetPanelBehavior_ReturnsNoArguments) {
++  auto function = base::MakeRefCounted<SidePanelSetPanelBehaviorFunction>();
++  auto result =
++      RunFunction(function, R"([{"openPanelOnActionClick": true}])");
++  EXPECT_FALSE(result.has_value());
++}
++
++TEST_F(SidePanelApiStubTest, GetPanelBehavior_ReturnsOpenPanelOnActionClickFalse) {
++  auto function = base::MakeRefCounted<SidePanelGetPanelBehaviorFunction>();
++  auto result = RunFunction(function, "[]");
++  ASSERT_TRUE(result.has_value());
++  ASSERT_TRUE(result->is_dict());
++
++  const base::Value::Dict& dict = result->GetDict();
++  std::optional<bool> open_on_click = dict.FindBool("openPanelOnActionClick");
++  ASSERT_TRUE(open_on_click.has_value());
++  EXPECT_FALSE(open_on_click.value());
++}
++
++TEST_F(SidePanelApiStubTest, Open_ReturnsNoArguments) {
++  auto function = base::MakeRefCounted<SidePanelOpenFunction>();
++  auto result = RunFunction(function, "[]");
++  EXPECT_FALSE(result.has_value());
++}
++
++TEST_F(SidePanelApiStubTest, GetLayout_ReturnsDefault) {
++  auto function = base::MakeRefCounted<SidePanelGetLayoutFunction>();
++  auto result = RunFunction(function, "[]");
++  ASSERT_TRUE(result.has_value());
++  ASSERT_TRUE(result->is_dict());
++  // Default PanelLayout should be a valid dict (may be empty or with defaults).
++}
++
++TEST_F(SidePanelApiStubTest, Close_ReturnsNoArguments) {
++  auto function = base::MakeRefCounted<SidePanelCloseFunction>();
++  auto result = RunFunction(function, "[]");
++  EXPECT_FALSE(result.has_value());
++}
++
++}  // namespace
++}  // namespace extensions

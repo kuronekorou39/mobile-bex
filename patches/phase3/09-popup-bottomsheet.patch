@@ -1,0 +1,451 @@
+diff --git a/chrome/browser/ui/android/extensions/java/res/values/strings.xml b/chrome/browser/ui/android/extensions/java/res/values/strings.xml
+new file mode 100644
+index 0000000000..aabb000001
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/res/values/strings.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright 2025 The Chromium Authors
++     Use of this source code is governed by a BSD-style license that can be
++     found in the LICENSE file. -->
++<resources>
++    <string name="extension_popup_sheet_opened_half">Extension popup opened at half height</string>
++    <string name="extension_popup_sheet_opened_full">Extension popup opened at full height</string>
++    <string name="extension_popup_sheet_closed">Extension popup closed</string>
++</resources>
+diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/android/extensions/BUILD.gn
+index 1234567890..abcdef1234 100644
+--- a/chrome/browser/ui/android/extensions/BUILD.gn
++++ b/chrome/browser/ui/android/extensions/BUILD.gn
+@@ -33,6 +33,9 @@ android_library("java") {
+   if (enable_extensions_core) {
+     deps += [
+       ":java_resources",
++      "//components/browser_ui/bottomsheet/android:java",
++      "//components/embedder_support/android:content_view_java",
++      "//components/embedder_support/android:web_contents_delegate_java",
+       "//chrome/browser/flags:java",
+       "//components/browser_ui/modaldialog/android:java",
+       "//components/browser_ui/settings/android:java",
+@@ -40,6 +43,8 @@ android_library("java") {
+       "//content/public/android:content_full_java",
+       "//third_party/androidx:androidx_annotation_annotation_java",
+       "//third_party/jni_zero:jni_zero_java",
++      "//components/thin_webview:factory_java",
++      "//components/thin_webview:java",
+     ]
+     sources += [
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionAction.java",
+@@ -47,6 +52,8 @@ android_library("java") {
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionsBridge.java",
++      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java",
++      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionDeveloperPrivateBridge.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionInstallDialogBridge.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUiBackendImpl.java",
+diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java
+new file mode 100644
+index 0000000000..1111111111
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java
+@@ -0,0 +1,109 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import android.content.Context;
++import android.view.View;
++import android.widget.FrameLayout;
++
++import androidx.annotation.StringRes;
++
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.browser.ui.extensions.R;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
++import org.chromium.components.thinwebview.ThinWebView;
++
++/**
++ * {@link BottomSheetContent} implementation that displays an extension popup
++ * inside a BottomSheet. Wraps a {@link ThinWebView} in a {@link FrameLayout}.
++ */
++@NullMarked
++public class ExtensionBottomSheetContent implements BottomSheetContent {
++    private static final float FULL_HEIGHT_RATIO = 0.7f;
++    private static final float HALF_HEIGHT_RATIO = 0.5f;
++
++    private final FrameLayout mContentView;
++    private final ThinWebView mThinWebView;
++    private final Runnable mOnBackPressedOrDismissed;
++
++    /**
++     * @param context The {@link Context} for creating views.
++     * @param thinWebView The {@link ThinWebView} rendering the extension popup.
++     * @param onBackPressedOrDismissed Callback invoked when back is pressed or sheet is dismissed.
++     */
++    public ExtensionBottomSheetContent(
++            Context context,
++            ThinWebView thinWebView,
++            Runnable onBackPressedOrDismissed) {
++        mThinWebView = thinWebView;
++        mOnBackPressedOrDismissed = onBackPressedOrDismissed;
++
++        mContentView = new FrameLayout(context);
++        mContentView.addView(
++                mThinWebView.getView(),
++                new FrameLayout.LayoutParams(
++                        FrameLayout.LayoutParams.MATCH_PARENT,
++                        FrameLayout.LayoutParams.MATCH_PARENT));
++    }
++
++    @Override
++    public View getContentView() {
++        return mContentView;
++    }
++
++    @Override
++    public @Nullable View getToolbarView() {
++        return null;
++    }
++
++    @Override
++    public int getVerticalScrollOffset() {
++        return 0;
++    }
++
++    @Override
++    public void destroy() {
++        mThinWebView.destroy();
++    }
++
++    @Override
++    public @ContentPriority int getPriority() {
++        return ContentPriority.HIGH;
++    }
++
++    @Override
++    public boolean swipeToDismissEnabled() {
++        return true;
++    }
++
++    @Override
++    public float getFullHeightRatio() {
++        return FULL_HEIGHT_RATIO;
++    }
++
++    @Override
++    public float getHalfHeightRatio() {
++        return HALF_HEIGHT_RATIO;
++    }
++
++    @Override
++    public boolean hasCustomLifecycle() {
++        return true;
++    }
++
++    @Override
++    public boolean handleBackPress() {
++        mOnBackPressedOrDismissed.run();
++        return true;
++    }
++
++    @Override
++    public @Nullable String getSheetContentDescription(Context context) {
++        return "Extension popup";
++    }
++
++    @Override
++    public @StringRes int getSheetHalfHeightAccessibilityStringId() {
++        return R.string.extension_popup_sheet_opened_half;
++    }
++
++    @Override
++    public @StringRes int getSheetFullHeightAccessibilityStringId() {
++        return R.string.extension_popup_sheet_opened_full;
++    }
++
++    @Override
++    public @StringRes int getSheetClosedAccessibilityStringId() {
++        return R.string.extension_popup_sheet_closed;
++    }
++}
+diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
+new file mode 100644
+index 0000000000..2222222222
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
+@@ -0,0 +1,121 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import android.app.Activity;
++import android.content.Context;
++
++import org.chromium.base.version_info.VersionInfo;
++import org.chromium.build.NullUtil;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
++import org.chromium.components.embedder_support.view.ContentView;
++import org.chromium.components.thinwebview.ThinWebView;
++import org.chromium.components.thinwebview.ThinWebViewConstraints;
++import org.chromium.components.thinwebview.ThinWebViewFactory;
++import org.chromium.content_public.browser.WebContents;
++import org.chromium.ui.base.ViewAndroidDelegate;
++import org.chromium.ui.base.WindowAndroid;
++
++/**
++ * Manages displaying an extension popup in a BottomSheet.
++ *
++ * <p>Follows the pattern established by PaymentHandlerCoordinator:
++ * WebContents -> ContentView -> ThinWebView -> BottomSheetContent -> BottomSheetController.
++ */
++@NullMarked
++public class ExtensionBottomSheetCoordinator {
++    private @Nullable BottomSheetController mBottomSheetController;
++    private @Nullable ExtensionBottomSheetContent mSheetContent;
++    private @Nullable ThinWebView mThinWebView;
++    private @Nullable ExtensionActionPopupContents mContents;
++
++    /**
++     * Shows the extension popup in a BottomSheet.
++     *
++     * @param windowAndroid The current {@link WindowAndroid}.
++     * @param contents The {@link ExtensionActionPopupContents} providing the WebContents.
++     * @return {@code true} if the BottomSheet was shown successfully.
++     */
++    public boolean showPopup(WindowAndroid windowAndroid, ExtensionActionPopupContents contents) {
++        Activity activity = NullUtil.assumeNonNull(windowAndroid.getActivity()).get();
++        if (activity == null) {
++            return false;
++        }
++
++        mBottomSheetController = BottomSheetControllerProvider.from(windowAndroid);
++        if (mBottomSheetController == null) {
++            return false;
++        }
++
++        mContents = contents;
++        Context context = activity;
++        WebContents webContents = contents.getWebContents();
++
++        // Create ContentView for the WebContents.
++        ContentView contentView = ContentView.createContentView(context, webContents);
++
++        // Set delegates so the WebContents can render into our view hierarchy.
++        webContents.setDelegates(
++                VersionInfo.getProductVersion(),
++                ViewAndroidDelegate.createBasicDelegate(contentView),
++                contentView,
++                windowAndroid,
++                WebContents.createDefaultInternalsHolder());
++
++        // Create ThinWebView and attach the WebContents.
++        mThinWebView =
++                ThinWebViewFactory.create(
++                        context,
++                        new ThinWebViewConstraints(),
++                        NullUtil.assumeNonNull(windowAndroid.getIntentRequestTracker()));
++        mThinWebView.attachWebContents(webContents, contentView, null);
++
++        // Wrap in BottomSheetContent.
++        mSheetContent =
++                new ExtensionBottomSheetContent(context, mThinWebView, this::hide);
++
++        // Listen for extension-initiated close (e.g. window.close()).
++        contents.setDelegate(
++                new ExtensionActionPopupContents.Delegate() {
++                    @Override
++                    public void resizeDueToAutoResize(int width, int height) {
++                        // BottomSheet manages its own size; ignore resize requests.
++                    }
++
++                    @Override
++                    public void onLoaded() {}
++
++                    @Override
++                    public void onClose() {
++                        hide();
++                    }
++                });
++
++        // Show the BottomSheet.
++        boolean shown = mBottomSheetController.requestShowContent(mSheetContent, /* animate= */ true);
++        if (!shown) {
++            cleanup();
++            return false;
++        }
++
++        // Start loading the extension popup page.
++        contents.loadInitialPage();
++        return true;
++    }
++
++    /** Hides and cleans up the BottomSheet. */
++    public void hide() {
++        if (mBottomSheetController != null && mSheetContent != null) {
++            mBottomSheetController.hideContent(mSheetContent, /* animate= */ true);
++        }
++        cleanup();
++    }
++
++    private void cleanup() {
++        if (mSheetContent != null) {
++            mSheetContent.destroy();
++            mSheetContent = null;
++        }
++        if (mContents != null) {
++            mContents.destroy();
++            mContents = null;
++        }
++        mThinWebView = null;
++        mBottomSheetController = null;
++    }
++}
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java
+index e76889e73c..aabbccddee 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java
+@@ -19,7 +19,6 @@ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.browser.profiles.Profile;
+ import org.chromium.chrome.browser.tab.Tab;
+-import org.chromium.chrome.browser.tabmodel.TabCreator;
+ import org.chromium.chrome.browser.toolbar.extensions.ExtensionActionButtonProperties.ListItemType;
+ import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
+@@ -57,8 +56,7 @@ public class ExtensionActionListCoordinator implements Destroyable {
+             ChromeAndroidTask task,
+             Profile profile,
+             NullableObservableSupplier<Tab> currentTabSupplier,
+-            ExtensionsToolbarBridge extensionsToolbarBridge,
+-            View fallbackAnchorView,
+-            TabCreator tabCreator) {
++            ExtensionsToolbarBridge extensionsToolbarBridge,
++            View fallbackAnchorView) {
+         mContext = context;
+         mContainer = container;
+
+@@ -73,8 +71,7 @@ public class ExtensionActionListCoordinator implements Destroyable {
+                         currentTabSupplier,
+                         this::getButtonViewForId,
+-                        extensionsToolbarBridge,
+-                        fallbackAnchorView,
+-                        tabCreator);
++                        extensionsToolbarBridge,
++                        fallbackAnchorView);
+
+         ExtensionsToolbarDragTouchHandler dragTouchHandler =
+                 new ExtensionsToolbarDragTouchHandler(context, mModels);
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
+index cd386cd5d7..eeff00112233 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
+@@ -18,9 +18,6 @@ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.browser.extensions.ContextMenuSource;
+ import org.chromium.chrome.browser.profiles.Profile;
+ import org.chromium.chrome.browser.tab.Tab;
+-import org.chromium.chrome.browser.tab.TabLaunchType;
+-import org.chromium.chrome.browser.tabmodel.TabCreator;
+-import org.chromium.content_public.browser.LoadUrlParams;
+ import org.chromium.chrome.browser.toolbar.MenuBuilderHelper;
+ import org.chromium.chrome.browser.toolbar.extensions.ExtensionActionButtonProperties.ListItemType;
+ import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
+@@ -28,6 +25,7 @@ import org.chromium.chrome.browser.ui.extensions.ExtensionActionContextMenuBridg
+ import org.chromium.chrome.browser.ui.extensions.ExtensionActionPopupContents;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionAction;
++import org.chromium.chrome.browser.ui.extensions.ExtensionBottomSheetCoordinator;
+ import org.chromium.chrome.browser.ui.toolbar.InvocationSource;
+ import org.chromium.ui.base.WindowAndroid;
+ import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
+@@ -56,7 +54,7 @@ class ExtensionActionListMediator implements Destroyable {
+
+     private final View mFallbackAnchorView;
+-    private final TabCreator mTabCreator;
+
++    @Nullable private ExtensionBottomSheetCoordinator mCurrentSheetCoordinator;
+     @Nullable private ExtensionActionPopup mCurrentPopup;
+     @Nullable private String mCurrentPopupActionId;
+
+@@ -70,8 +68,7 @@ class ExtensionActionListMediator implements Destroyable {
+             NullableObservableSupplier<Tab> currentTabSupplier,
+             ExtensionActionListCoordinator.ActionAnchorViewProvider actionAnchorViewProvider,
+-            ExtensionsToolbarBridge extensionsToolbarBridge,
+-            View fallbackAnchorView,
+-            TabCreator tabCreator) {
++            ExtensionsToolbarBridge extensionsToolbarBridge,
++            View fallbackAnchorView) {
+         mContext = context;
+         mWindowAndroid = windowAndroid;
+         mModels = models;
+@@ -80,7 +77,6 @@ class ExtensionActionListMediator implements Destroyable {
+         mCurrentTabSupplier = currentTabSupplier;
+         mActionAnchorViewProvider = actionAnchorViewProvider;
+         mFallbackAnchorView = fallbackAnchorView;
+-        mTabCreator = tabCreator;
+         mExtensionsToolbarBridge = extensionsToolbarBridge;
+
+         mExtensionsToolbarBridge.setDelegate(mToolbarDelegate);
+@@ -86,6 +83,7 @@ class ExtensionActionListMediator implements Destroyable {
+     @Override
+     public void destroy() {
+         closePopup();
++        closeCurrentSheet();
+         assert mCurrentPopup == null;
+         mExtensionsToolbarBridge.removeObserver(mToolbarObserver);
+         mExtensionsToolbarBridge.setDelegate(null);
+@@ -256,14 +252,17 @@ class ExtensionActionListMediator implements Destroyable {
+     }
+
+     private void triggerPopup(String actionId, long nativeHostPtr) {
+-        closePopup();
++        closeCurrentSheet();
+
+         ExtensionActionPopupContents contents = ExtensionActionPopupContents.create(nativeHostPtr);
+
+-        // Open the extension popup as a new tab for mobile-friendly display.
+-        String popupUrl = contents.getPopupUrl();
+-        if (popupUrl != null && !popupUrl.isEmpty()) {
+-            LoadUrlParams params = new LoadUrlParams(popupUrl);
+-            mTabCreator.createNewTab(
+-                    params, TabLaunchType.FROM_CHROME_UI, mCurrentTabSupplier.get());
++        mCurrentSheetCoordinator = new ExtensionBottomSheetCoordinator();
++        boolean success = mCurrentSheetCoordinator.showPopup(mWindowAndroid, contents);
++        if (!success) {
++            contents.destroy();
++            mCurrentSheetCoordinator = null;
+         }
+-        contents.destroy();
++    }
++
++    private void closeCurrentSheet() {
++        if (mCurrentSheetCoordinator != null) {
++            mCurrentSheetCoordinator.hide();
++            mCurrentSheetCoordinator = null;
++        }
+     }
+
+     private void onContextClick(String actionId) {
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java
+index 6619aea097..ffeeddccbb 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java
+@@ -66,8 +66,7 @@ public class ExtensionToolbarCoordinatorImpl implements ExtensionToolbarCoordina
+                         profile,
+                         currentTabSupplier,
+-                        mExtensionsToolbarBridge,
+-                        extensionsMenuButton,
+-                        tabCreator);
++                        mExtensionsToolbarBridge,
++                        extensionsMenuButton);
+         mExtensionsMenuAndAccessControlButtonCoordinator =
+                 new ExtensionsMenuAndAccessControlButtonCoordinator(
+                         context,

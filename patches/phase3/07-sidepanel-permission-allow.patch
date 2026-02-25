@@ -1,0 +1,14 @@
+diff --git a/chrome/common/extensions/api/_permission_features.json b/chrome/common/extensions/api/_permission_features.json
+index eb6e40597c..03ed55f122 100644
+--- a/chrome/common/extensions/api/_permission_features.json
++++ b/chrome/common/extensions/api/_permission_features.json
+@@ -963,8 +963,7 @@
+     "channel": "stable",
+     "extension_types": ["extension"],
+     "min_manifest_version": 3,
+-    // "desktop_android" is not supported.
+-    "platforms": ["chromeos", "linux", "mac", "win"]
++    "platforms": ["chromeos", "linux", "mac", "win", "desktop_android"]
+   },
+   "smartCardProviderPrivate": {
+     "channel": "stable",

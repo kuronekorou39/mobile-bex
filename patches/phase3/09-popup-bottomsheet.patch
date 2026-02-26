@@ -368,7 +368,7 @@ index cd386cd5d7..eeff00112233 100644
  import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 @@ -56,7 +54,7 @@ class ExtensionActionListMediator implements Destroyable {
 
-     private final View mFallbackAnchorView;
+-    private final View mFallbackAnchorView;
 -    private final TabCreator mTabCreator;
 
 +    @Nullable private ExtensionBottomSheetCoordinator mCurrentSheetCoordinator;
@@ -389,7 +389,7 @@ index cd386cd5d7..eeff00112233 100644
 @@ -80,7 +77,6 @@ class ExtensionActionListMediator implements Destroyable {
          mCurrentTabSupplier = currentTabSupplier;
          mActionAnchorViewProvider = actionAnchorViewProvider;
-         mFallbackAnchorView = fallbackAnchorView;
+-        mFallbackAnchorView = fallbackAnchorView;
 -        mTabCreator = tabCreator;
          mExtensionsToolbarBridge = extensionsToolbarBridge;
 
@@ -407,6 +407,7 @@ index cd386cd5d7..eeff00112233 100644
 
      private void triggerPopup(String actionId, long nativeHostPtr) {
 -        closePopup();
++        mCurrentPopupActionId = actionId;
 +        closeCurrentSheet();
 
          ExtensionActionPopupContents contents = ExtensionActionPopupContents.create(nativeHostPtr);

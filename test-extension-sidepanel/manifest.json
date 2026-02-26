@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex sidePanel API Test",
+  "version": "1.0.0",
+  "description": "Tests all 7 chrome.sidePanel API methods",
+  "permissions": [
+    "sidePanel",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

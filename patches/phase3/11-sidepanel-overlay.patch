@@ -332,7 +332,7 @@ new file mode 100644
 +        Window window = mDialog.getWindow();
 +        if (window != null) {
 +            window.setLayout(panelWidth, WindowManager.LayoutParams.MATCH_PARENT);
-+            window.setGravity(Gravity.START);
++            window.setGravity(Gravity.END);
 +            window.setBackgroundDrawableResource(android.R.color.black);
 +
 +            // Dim background (scrim).
@@ -380,7 +380,7 @@ new file mode 100644
 +     Use of this source code is governed by a BSD-style license that can be
 +     found in the LICENSE file. -->
 +<translate xmlns:android="http://schemas.android.com/apk/res/android"
-+    android:fromXDelta="-100%"
++    android:fromXDelta="100%"
 +    android:toXDelta="0%"
 +    android:duration="300"
 +    android:interpolator="@android:anim/decelerate_interpolator" />
@@ -396,7 +396,7 @@ new file mode 100644
 +     found in the LICENSE file. -->
 +<translate xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:fromXDelta="0%"
-+    android:toXDelta="-100%"
++    android:toXDelta="100%"
 +    android:duration="250"
 +    android:interpolator="@android:anim/accelerate_interpolator" />
 

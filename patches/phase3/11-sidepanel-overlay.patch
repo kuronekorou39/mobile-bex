@@ -74,6 +74,44 @@ diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/a
  
    deps = [
 
+diff --git a/chrome/browser/ui/extensions/extension_action_view_model.cc b/chrome/browser/ui/extensions/extension_action_view_model.cc
+--- a/chrome/browser/ui/extensions/extension_action_view_model.cc
++++ b/chrome/browser/ui/extensions/extension_action_view_model.cc
+@@ -48,6 +48,8 @@
+ #include "ui/gfx/native_ui_types.h"
+ #include "ui/native_theme/native_theme.h"
+
++#include "chrome/common/extensions/api/side_panel/side_panel_info.h"
++
+ #if BUILDFLAG(ENABLE_EXTENSIONS)
+ #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
+ #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
+@@ -336,7 +338,13 @@
+       side_panel_service->HasSidePanelActionForTab(*extension_, tab_id)) {
+     return true;
+   }
+-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)}
++#else   // BUILDFLAG(ENABLE_EXTENSIONS)
++  // On desktop-android, SidePanelService is not available.
++  // Use manifest data to check if the extension has a side panel.
++  if (extensions::SidePanelInfo::HasSidePanel(extension_.get())) {
++    return true;
++  }
++#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+   return false;
+ }
+
+@@ -647,7 +655,8 @@
+       side_panel_service &&
+       side_panel_service->HasSidePanelActionForTab(*extension_, tab_id);
+ #else   // BUILDFLAG(ENABLE_EXTENSIONS)
+-  bool has_side_panel_action = false;
++  bool has_side_panel_action =
++      extensions::SidePanelInfo::HasSidePanel(extension_.get());
+ #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+   bool is_grayscale =
+       GetSiteInteraction(web_contents) ==
+
 diff --git a/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc b/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
 --- a/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
 +++ b/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc

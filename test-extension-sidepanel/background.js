@@ -74,7 +74,7 @@ async function runTests() {
   console.log("[mobile-bex] sidePanel test results:", results);
 }
 
-runTests();
+// runTests(); // 起動時の自動実行を無効化（起動ハングの原因）
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex Notifications Test",
+  "version": "1.0.0",
+  "description": "Tests the chrome.notifications API for system notifications",
+  "permissions": ["notifications"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Notifications Test"
+  }
+}

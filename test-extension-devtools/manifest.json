@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex DevTools Panel Test",
+  "version": "1.0.0",
+  "description": "Tests adding a custom panel to Chrome DevTools",
+  "permissions": ["tabs", "scripting", "activeTab"],
+  "action": {
+    "default_title": "Open DevTools Panel"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "devtools_page": "devtools.html"
+}

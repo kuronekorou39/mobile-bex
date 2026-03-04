@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex Context Menu Test",
+  "version": "1.0.0",
+  "description": "Tests adding items to the context menu (long-press menu)",
+  "permissions": ["contextMenus", "tabs", "scripting", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

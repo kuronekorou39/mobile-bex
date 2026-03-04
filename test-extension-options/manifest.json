@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex Options Page Test",
+  "version": "1.0.0",
+  "description": "Tests the options_ui page for extension settings",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Options Page Test"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

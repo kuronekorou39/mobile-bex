@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex Omnibox Test",
+  "version": "1.0.0",
+  "description": "Tests omnibox (address bar) keyword suggestions",
+  "permissions": ["tabs"],
+  "omnibox": {
+    "keyword": "bex"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

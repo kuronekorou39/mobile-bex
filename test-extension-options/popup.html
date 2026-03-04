@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: system-ui; background: #0f172a; color: #e2e8f0; padding: 16px; width: 280px; }
+    h2 { color: #38bdf8; font-size: 16px; margin-bottom: 12px; }
+    button { background: #2563eb; color: white; border: none; border-radius: 8px; padding: 10px 16px; width: 100%; font-size: 14px; cursor: pointer; }
+    .info { color: #94a3b8; font-size: 12px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h2>Options Page Test</h2>
+  <button id="open-options">Open Options Page</button>
+  <p class="info">chrome://extensions から「詳細」→「拡張機能のオプション」でも開けます</p>
+  <script>
+    document.getElementById("open-options").addEventListener("click", () => {
+      chrome.runtime.openOptionsPage();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "mobile-bex Full Tab Page Test",
+  "version": "1.0.0",
+  "description": "Tests opening an extension page in a full browser tab",
+  "permissions": ["tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Full Tab Page"
+  }
+}

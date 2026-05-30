@@ -13,10 +13,6 @@
   <h2>Options Page Test</h2>
   <button id="open-options">Open Options Page</button>
   <p class="info">chrome://extensions から「詳細」→「拡張機能のオプション」でも開けます</p>
-  <script>
-    document.getElementById("open-options").addEventListener("click", () => {
-      chrome.runtime.openOptionsPage();
-    });
-  </script>
+  <script src="popup.js"></script>
 </body>
 </html>

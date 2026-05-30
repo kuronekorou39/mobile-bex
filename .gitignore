@@ -1,2 +1,7 @@
 .claude/
 *.apk
+
+# Local debug artifacts (Preferences backups, screenshots, transient zips)
+Preferences*.json
+bex-screen*.png
+test-extensions-all-*.zip

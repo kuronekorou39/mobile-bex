@@ -1,0 +1,118 @@
+diff --git a/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc b/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc
+--- a/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc
++++ b/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc
+@@ -7,6 +7,7 @@
+ #include "chrome/browser/ui/android/extensions/extensions_menu_delegate_android.h"
+
+ #include "ui/gfx/image/image_skia.h"
++#include "ui/gfx/image/image_skia_rep.h"
+
+ #include "base/android/jni_array.h"
+ #include "chrome/browser/ui/extensions/extensions_menu_view_model.h"
+@@ -17,10 +18,27 @@ namespace {
+ // Returns a Java ExtensionsMenuTypes.ControlState object.
+ base::android::ScopedJavaLocalRef<jobject> CreateJavaControlState(
+     JNIEnv* env,
+     const ExtensionsMenuViewModel::ControlState& state) {
++  // Convert icon to Java Bitmap if available.
++  base::android::ScopedJavaLocalRef<jobject> j_icon;
++  if (!state.icon.IsEmpty() && state.icon.IsImage()) {
++    gfx::ImageSkia image_skia = state.icon.GetImage().AsImageSkia();
++    if (!image_skia.isNull()) {
++      const SkBitmap& bitmap =
++          image_skia.GetRepresentation(1.0f).GetBitmap();
++      if (!bitmap.isNull()) {
++        j_icon = gfx::ConvertToJavaBitmap(bitmap);
++      }
++    }
++  }
+   return extensions::Java_ControlState_Constructor(
+       env, static_cast<int>(state.status), state.text, state.accessible_name,
+-      state.tooltip_text, state.is_on);
++      state.tooltip_text, state.is_on, j_icon);
+ }
+
+ }  // namespace
+@@ -47,8 +64,7 @@ ExtensionsMenuDelegateAndroid::GetMenuEntries(JNIEnv* env) {
+
+   for (const auto& action_model : menu_model_->action_models()) {
+-    // TODO(crbug.com/471016915): Use the correct size for the icon once
+-    // implemented. For now, using a placeholder.
+-    auto icon_size = gfx::Size();
++    auto icon_size = gfx::Size(24, 24);
+     extensions::ExtensionId id = action_model->GetId();
+     ExtensionsMenuViewModel::MenuEntryState state =
+         menu_model_->GetMenuEntryState(id, icon_size);
+diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionsMenuTypes.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionsMenuTypes.java
+--- a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionsMenuTypes.java
++++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionsMenuTypes.java
+@@ -3,6 +3,8 @@
+
+ package org.chromium.chrome.browser.ui.extensions;
+
++import android.graphics.Bitmap;
++
+ import androidx.annotation.IntDef;
+
+ import org.jni_zero.CalledByNative;
+@@ -10,6 +12,7 @@ import org.jni_zero.JNINamespace;
+ import org.jni_zero.JniType;
+
+ import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
+
+ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+@@ -37,8 +40,7 @@ public class ExtensionsMenuTypes {
+         public final String tooltipText;
+         public final boolean isOn;
+
+-        // TODO(crbug.com/471016915): Add icon.
+-
++        public final @Nullable Bitmap icon;
+         @CalledByNative("ControlState")
+         public ControlState(
+                 @Status int status,
+@@ -46,12 +48,14 @@ public class ExtensionsMenuTypes {
+                 @JniType("std::u16string") String accessibleName,
+                 @JniType("std::u16string") String tooltipText,
+-                boolean isOn) {
++                boolean isOn,
++                @Nullable Bitmap icon) {
+             this.status = status;
+             this.text = text;
+             this.accessibleName = accessibleName;
+             this.tooltipText = tooltipText;
+             this.isOn = isOn;
++            this.icon = icon;
+         }
+     }
+
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java
+@@ -146,7 +146,7 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observe
+
+         for (ExtensionsMenuTypes.MenuEntryState entry : entries) {
+-            PropertyModel model =
+-                    new PropertyModel.Builder(ExtensionsMenuItemProperties.ALL_KEYS)
++            PropertyModel.Builder builder =
++                    new PropertyModel.Builder(ExtensionsMenuItemProperties.ALL_KEYS)
+                             .with(ExtensionsMenuItemProperties.TITLE, entry.actionButton.text)
+                             .with(
+                                     ExtensionsMenuItemProperties.CLICK_LISTENER,
+@@ -155,8 +155,12 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observe
+                                                     (ListMenuButton) view, entry.id))
+                             .with(
+                                     ExtensionsMenuItemProperties.ROW_CLICK_LISTENER,
+-                                    (view) -> mOnActionClicked.accept(entry.id))
+-                            .build();
+-            mActionModels.add(new ListItem(0, model));
++                                    (view) -> mOnActionClicked.accept(entry.id));
++            if (entry.actionButton.icon != null) {
++                builder.with(ExtensionsMenuItemProperties.ICON, entry.actionButton.icon);
++            }
++            mActionModels.add(new ListItem(0, builder.build()));
+         }
+
+         boolean isZeroState = entries.isEmpty();

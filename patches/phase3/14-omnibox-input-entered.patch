@@ -1,0 +1,140 @@
+diff --git a/chrome/browser/android/omnibox/autocomplete_controller_android.h b/chrome/browser/android/omnibox/autocomplete_controller_android.h
+--- a/chrome/browser/android/omnibox/autocomplete_controller_android.h
++++ b/chrome/browser/android/omnibox/autocomplete_controller_android.h
+@@ -108,6 +108,14 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
+   base::android::ScopedJavaLocalRef<jobject> GetMatchingTabForSuggestion(
+       JNIEnv* env,
+       uintptr_t match_ptr);
++
++  // Returns true if the match is an extension keyword match and the
++  // onInputEntered event was dispatched to the extension. In that case,
++  // Java should NOT navigate to the match URL.
++  bool ProcessExtensionKeywordMatch(
++      JNIEnv* env,
++      uintptr_t match_ptr,
++      const base::android::JavaRef<jobject>& j_web_contents);
+
+   // KeyedService:
+   void Shutdown() override;
+diff --git a/chrome/browser/android/omnibox/autocomplete_controller_android.cc b/chrome/browser/android/omnibox/autocomplete_controller_android.cc
+--- a/chrome/browser/android/omnibox/autocomplete_controller_android.cc
++++ b/chrome/browser/android/omnibox/autocomplete_controller_android.cc
+@@ -30,6 +30,8 @@
+ #include "chrome/browser/autocomplete/chrome_autocomplete_provider_client.h"
+ #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
+ #include "chrome/browser/autocomplete/shortcuts_backend_factory.h"
++#include "chrome/browser/extensions/api/omnibox/omnibox_api.h"
++#include "base/strings/utf_string_conversions.h"
+ #include "chrome/browser/omnibox/autocomplete_controller_emitter_factory.h"
+ #include "chrome/browser/predictors/autocomplete_action_predictor.h"
+ #include "chrome/browser/predictors/autocomplete_action_predictor_factory.h"
+@@ -428,6 +430,46 @@
+   }
+ }
+
++bool AutocompleteControllerAndroid::ProcessExtensionKeywordMatch(
++    JNIEnv* env,
++    uintptr_t match_ptr,
++    const JavaRef<jobject>& j_web_contents) {
++  const auto& match = *reinterpret_cast<AutocompleteMatch*>(match_ptr);
++
++  TemplateURLService* template_url_service =
++      TemplateURLServiceFactory::GetForProfile(profile_);
++  if (!template_url_service) {
++    return false;
++  }
++
++  TemplateURL* template_url = match.GetTemplateURL(template_url_service);
++  if (!template_url ||
++      template_url->type() != TemplateURL::OMNIBOX_API_EXTENSION) {
++    return false;
++  }
++
++  content::WebContents* web_contents =
++      content::WebContents::FromJavaWebContents(j_web_contents);
++  if (!web_contents) {
++    return false;
++  }
++
++  // Strip the keyword + leading space off the input, matching
++  // ChromeOmniboxClient::ProcessExtensionMatch on desktop.
++  std::u16string remaining_input;
++  AutocompleteInput::SplitKeywordFromInput(
++      match.fill_into_edit, true, &remaining_input);
++
++  extensions::ExtensionOmniboxEventRouter::OnInputEntered(
++      web_contents,
++      template_url->GetExtensionId(),
++      base::UTF16ToUTF8(remaining_input),
++      WindowOpenDisposition::CURRENT_TAB);
++
++  return true;
++}
++
+ void AutocompleteControllerAndroid::Shutdown() {
+   autocomplete_controller_.reset();
+ }
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java
+@@ -394,6 +394,22 @@
+                         mNativeController, match.getNativeObjectRef(), elapsedTimeSinceInputChange);
+     }
+
++    /**
++     * Checks if the match is an extension keyword match and dispatches onInputEntered.
++     *
++     * @param match The AutocompleteMatch to check.
++     * @param webContents The WebContents for the current tab.
++     * @return true if the match was handled by an extension (caller should skip URL loading).
++     */
++    boolean processExtensionKeywordMatch(
++            AutocompleteMatch match, @Nullable WebContents webContents) {
++        if (mNativeController == 0) return false;
++        if (match.getNativeObjectRef() == 0L) return false;
++        if (webContents == null) return false;
++        return AutocompleteControllerJni.get()
++                .processExtensionKeywordMatch(
++                        mNativeController, match.getNativeObjectRef(), webContents);
++    }
++
+     /**
+      * Pass the UI specific measurement information to Native code to aid Adaptive Suggestions.
+      *
+@@ -513,5 +529,9 @@
+
+         /** Acquire an instance of AutocompleteController associated with the supplied profile. */
+         AutocompleteController getForProfile(@JniType("Profile*") Profile profile);
++
++        boolean processExtensionKeywordMatch(
++                long nativeAutocompleteControllerAndroid,
++                long nativeAutocompleteMatch,
++                @Nullable WebContents webContents);
+     }
+ }
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java
+@@ -1150,6 +1150,20 @@
+         try (TraceEvent e = TraceEvent.scoped("AutocompleteMediator.loadUrlFromOmniboxMatch")) {
+             OmniboxMetrics.recordFocusToOpenTime(
+                     System.currentTimeMillis()
+                             - assumeNonNull(mAutocompleteInput).getUrlFocusTime());
+
++            // Check if this is an extension keyword match. If so, dispatch
++            // onInputEntered to the extension instead of navigating.
++            if (mAutocomplete != null) {
++                var tab = mDataProvider.getTab();
++                WebContents webContents = tab != null ? tab.getWebContents() : null;
++                if (mAutocomplete.processExtensionKeywordMatch(suggestion, webContents)) {
++                    mDeferredLoadAction = null;
++                    mOmniboxFocusResultedInNavigation = true;
++                    recordMetrics(
++                            suggestion, null, matchIndex, WindowOpenDisposition.CURRENT_TAB);
++                    return;
++                }
++            }
++
+             // Clear the deferred site load action in case it executes. Reclaims a bit of memory.
+             mDeferredLoadAction = null;
+

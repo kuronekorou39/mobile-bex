@@ -88,19 +88,22 @@
 - **症状**:
   - アドレスバーに `bex ` 入力 → サジェスト一覧表示 ✅ (`onInputStarted` / `onInputChanged` 動作)
   - 続けて文字入力 → サジェストがフィルタされる ✅
-  - **Enter キー押下 → 何も起きない** ❌ (`onInputEntered` 未発火)
+  - **Enter キー押下 → 何も起きない / または Chrome のフォールバックで「このサイトにアクセスできません」**
+  - **サジェスト項目をタップ → これも何も起きない**
+  - 結果: `chrome.tabs.update({url})` が呼ばれず、ナビゲーションも遷移も発生しない
 - **Patch 14 の実装内容** (パッチ作成済み・適用済み):
   - C++: `AutocompleteControllerAndroid::ProcessExtensionKeywordMatch` 追加（extension keyword の match を検出して `ExtensionOmniboxEventRouter::OnInputEntered` を発火）
   - Java: `AutocompleteController.processExtensionKeywordMatch` 追加 (JNI bridge)
   - Java: `AutocompleteMediator.loadUrlFromOmniboxMatch` で extension keyword 判定 + 早期 return
-- **仮説**:
-  - (A) Enter 押下時に `AutocompleteMediator.loadUrlFromOmniboxMatch` が呼ばれていない (別の経路で URL 確定)
-  - (B) `template_url->type() != TemplateURL::OMNIBOX_API_EXTENSION` のチェックで false 判定 → 早期 return せず Enter が無視される
-  - (C) `OnInputEntered` 自体は発火しているが、Service Worker 側で何らかの理由で `onInputEntered.addListener` のハンドラまで届いていない
+- **仮説の絞り込み** (2026-06-01 追加):
+  - **タップとEnter の両方が発火しない**ことから、Patch 14 が修正を入れた `AutocompleteMediator.loadUrlFromOmniboxMatch` は **Android omnibox の選択確定経路ではない**可能性が高い。
+  - 実際の経路は `SuggestionListMediator.onItemSelected` または `OmniboxSuggestionsAdapter.onSuggestionClicked` のような別レイヤーである可能性。
+  - 別仮説として、`loadUrlFromOmniboxMatch` は呼ばれているが、`processExtensionKeywordMatch` の中で `template_url->type() != OMNIBOX_API_EXTENSION` で false を返している ケースも残るが、その場合は早期 return せず通常ナビゲーションが走る (「アクセスできません」が出る)
+  - 両症状が混在しているのは、入力タイミング/タブ状態によってフローが変わる可能性
 - **次のアクション**:
-  - Service Worker / Native の logcat で詳細確認（Service Worker の `console.log("[mobile-bex] Omnibox entered: ...")` が出ているかが鍵）
-  - 出ていなければ Patch 14 の C++/Java 側に問題
-  - 出ていれば `chrome.tabs.update({ url })` 側に問題
+  1. Service Worker / Native の logcat 確認（Service Worker の `console.log("[mobile-bex] Omnibox entered: ...")` が出ているかが一次切り分け）
+  2. **Java 側のフック地点の見直し** — `AutocompleteMediator.loadUrlFromOmniboxMatch` 以外で Enter / タップ確定が処理される経路を探す
+  3. C++ 側に `LOG(ERROR)` を仕込んで `ProcessExtensionKeywordMatch` が呼ばれているか確認
 
 ## 既知の派生課題
 

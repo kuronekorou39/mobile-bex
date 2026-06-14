@@ -75,11 +75,25 @@ ARGS_EOF
     echo 'cc_wrapper = "ccache"' >> "$args_file"
   fi
 
-  # Extensions support (requires patches)
+  # Extensions support — enable the "Desktop Android" build flavor.
   cat >> "$args_file" << 'ARGS_EOF'
 
-# Extensions support (requires mobile-bex patches)
-enable_extensions = true
+# Extensions support: enable Google's "Desktop Android" flavor. This flows to
+# enable_desktop_android_extensions -> enable_extensions_core = true, the
+# Android-capable extensions config (see docs/phase1-results.md).
+# Do NOT set `enable_extensions = true` directly: on Android it pulls in
+# app_shell (//extensions/shell -> //apps) and trips assert(!is_android) in
+# 50+ BUILD.gn files, breaking `gn gen` (see docs/patch-research.md).
+is_desktop_android = true
+
+# Proprietary codecs (H.264/AAC) — required for live streaming.
+# Without these the build defaults to Chromium branding and lacks H.264/AAC,
+# so Twitch/YouTube live fail to decode (Twitch error #4000,
+# MediaSource.isTypeSupported('...avc1...,mp4a...') == false). VP9/AV1 (e.g.
+# YouTube VOD) still work since they ship with Chromium. H.264 video decodes
+# via the Android platform MediaCodec; AAC audio uses the bundled ffmpeg.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
 ARGS_EOF
 
   echo ""

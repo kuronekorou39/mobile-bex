@@ -1,0 +1,80 @@
+diff --git a/chrome/browser/resources/extensions/extensions.html b/chrome/browser/resources/extensions/extensions.html
+index 58f56797ee..dd8098956e 100644
+--- a/chrome/browser/resources/extensions/extensions.html
++++ b/chrome/browser/resources/extensions/extensions.html
+@@ -4,6 +4,7 @@
+ <head>
+   <meta charset="utf8">
+   <meta name="color-scheme" content="light dark">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
+   <title>$i18n{title}</title>
+   <base href="chrome://extensions">
+   <link rel="stylesheet" href="chrome://resources/css/md_colors.css">
+diff --git a/chrome/browser/resources/extensions/item_list.css b/chrome/browser/resources/extensions/item_list.css
+index c7c0e32493..6abd62074b 100644
+--- a/chrome/browser/resources/extensions/item_list.css
++++ b/chrome/browser/resources/extensions/item_list.css
+@@ -100,3 +100,16 @@ managed-footnote {
+    * is clickable. */
+   z-index: 1;
+ }
++
++/* mobile-bex: phone layout */
++@media (max-width: 680px) {
++  #content-wrapper {
++    padding: 16px 12px 48px;
++    min-width: 0;
++  }
++  .items-container {
++    grid-template-columns: 1fr;
++    --grid-gutter: 10px;
++    max-width: none;
++  }
++}
+diff --git a/chrome/browser/resources/extensions/manager.css b/chrome/browser/resources/extensions/manager.css
+index 18cf43dd6c..b35002e915 100644
+--- a/chrome/browser/resources/extensions/manager.css
++++ b/chrome/browser/resources/extensions/manager.css
+@@ -73,3 +73,11 @@ extensions-item {
+ #right {
+   flex: 1 1 0;
+ }
++
++/* mobile-bex: phone layout */
++@media (max-width: 680px) {
++  cr-toast-manager {
++    /* 長いトーストを1行で切らず折り返す（例: デベロッパーモードOff通知） */
++    --cr-toast-white-space: normal;
++  }
++}
+diff --git a/chrome/browser/resources/extensions/toolbar.css b/chrome/browser/resources/extensions/toolbar.css
+index 7e723e0284..7092a6668e 100644
+--- a/chrome/browser/resources/extensions/toolbar.css
++++ b/chrome/browser/resources/extensions/toolbar.css
+@@ -79,3 +79,26 @@ cr-toolbar {
+   --cr-toolbar-field-width: 100%;
+   --cr-toolbar-header-white-space: nowrap;
+ }
++
++/* mobile-bex: phone layout */
++@media (max-width: 680px) {
++  #buttonStrip {
++    position: static;
++    width: auto;
++    margin-inline: 12px;
++    display: flex;
++    flex-wrap: wrap;
++    gap: 8px;
++  }
++  #buttonStrip cr-button {
++    margin-inline-end: 0;
++    max-width: 100%;
++  }
++  /* Pack ボタンはモバイルではほぼ使わないため非表示 */
++  #packExtensions {
++    display: none;
++  }
++  #devDrawer[expanded] {
++    height: auto;
++  }
++}

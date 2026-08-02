@@ -1,0 +1,30 @@
+# mobile-bex: 軽量検証CI
+# Chromium フルビルドは GitHub ホストランナーでは不可能 (ディスク不足) なため、
+# ビルドせずに検証できるものだけをチェックする:
+#   - パッチの hunk 整合性 (手編集による corrupt patch の検出)
+#   - LF 改行 (CRLF 混入で WSL / git apply が全滅する事故の防止)
+#   - テスト拡張機能の manifest.json (JSON / MV3)
+#   - シェルスクリプトの shellcheck
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate patches / line endings / manifests
+        run: python3 scripts/validate-patches.py
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # まずは実害のある error レベルのみ検出 (スタイル警告で CI を
+          # 赤にしない)。品質を上げる際は --severity を下げる。
+          shellcheck --severity=error scripts/*.sh

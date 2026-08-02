@@ -1,6 +1,6 @@
 # Patch 13: 拡張機能メニュー行にアイコンを表示する
 diff --git a/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc b/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc
-index a6c9bf3..d267bd6 100644
+index a6c9bf3..86a151d 100644
 --- a/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc
 +++ b/chrome/browser/ui/android/extensions/extensions_menu_delegate_android.cc
 @@ -8,8 +8,11 @@
@@ -27,8 +27,8 @@ index a6c9bf3..d267bd6 100644
 +      // 1x 表現だと高密度端末で 24px のビットマップを数倍に拡大表示する
 +      // ことになりぼける。端末のスケールに合った表現を取得する。
 +      float scale = 1.0f;
-+      if (display::Screen::GetScreen()) {
-+        scale = display::Screen::GetScreen()
++      if (display::Screen::HasScreen()) {
++        scale = display::Screen::Get()
 +                    ->GetPrimaryDisplay()
 +                    .device_scale_factor();
 +      }

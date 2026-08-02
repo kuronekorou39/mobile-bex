@@ -1,5 +1,13 @@
 # Android版Chromium 拡張機能有効化 — パッチ調査レポート
 
+> **本書は Phase 1 開始前の事前調査であり、結論は既に更新されている。**
+> 当初は Kiwi Browser / wchen342 / Cromite の先行事例から「約75ファイルのパッチが必要」と
+> 見積もっていたが、Phase 1 の実測でこの推定は覆り、**`is_desktop_android = true` の1行だけで
+> 拡張機能の基盤が動作する**ことが判明した（`docs/phase1-results.md` 参照）。
+> 以下の本文は当時の調査内容をそのまま残したもので、歴史的経緯として保存している。
+> なお「`enable_extensions = true` を直接指定するとビルドが通らない」という指摘（第1節）は
+> 現在も有効で、`scripts/build.sh` はこれを踏まえて `is_desktop_android` を使っている。
+
 ## 1. 現状の問題
 
 Chromiumは `extensions/buildflags/buildflags.gni` で**Androidの拡張機能をデフォルト無効化**している：

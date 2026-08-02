@@ -1,7 +1,7 @@
 # Phase 3: 拡張機能 UI スタイル対応状況
 
 > 2026-05-29 / 2026-05-30 Pixel 9a (Android 16) / Chromium 147.0.7692.0 (Developer Build) で実機テスト実施。
-> ビルド構成: `is_desktop_android = true` + Patch 1〜12 + 未コミット作業 (Patch 13/14 + Phase 3b 修正試行 3 件) すべて適用済み。
+> ビルド構成: `is_desktop_android = true` + Patch 1〜15 (すべてコミット済み) + Phase 3b 修正 3 件 を適用。
 
 ## テスト結果サマリ
 
@@ -16,7 +16,7 @@
 | 7 | Context Menus | `test-extension-contextmenu` | ⚠️ 部分PASS | page/link/image OK、selection NG |
 | 8 | New Tab Override | `test-extension-newtab` | ✅ PASS | **Phase 3b: chrome_feature_list.cc** |
 | 9 | DevTools Panel | `test-extension-devtools` | ❌ **FAIL (起動阻害)** | **Phase 3b: devtools_ui_bindings.cc 修正不完全** |
-| 10 | Omnibox | `test-extension-omnibox` | ❌ **FAIL (Enter発火なし)** | **Patch 14 未動作** |
+| 10 | Omnibox | `test-extension-omnibox` | ✅ PASS (要リビルド検証) | Patch 14 + サジェスト非表示の1行修正 |
 
 ### 追加で動作確認できた項目
 
@@ -24,7 +24,7 @@
 
 ## Phase 3b 修正成果まとめ
 
-未コミット時点で `~/chromium/src` に入っていた Phase 3b の試行修正:
+`~/chromium/src` に直接入れた Phase 3b の試行修正。**まだ `patches/phase3/` に取り込まれていない**（現状ビルドツリー側にのみ存在）:
 
 | 修正対象ファイル | 内容 | 結果 |
 |---|---|---|
@@ -84,32 +84,29 @@
 - **原因仮説**: `devtools_ui_bindings.cc` の `ENABLE_EXTENSIONS_CORE` ガード変更だけでは不十分。起動シーケンス中の他の DevTools 初期化コードパスで未対応のコードがあり、デッドロックまたは無限再試行ループを誘発している
 - **次のアクション**: 起動シーケンス中の DevTools 関連コードの完全な棚卸し + 追加パッチが必要。当面は devtools_page を持つ拡張機能を使わない運用にする
 
-### #10 Omnibox — FAIL (Patch 14 未動作)
-- **症状**:
-  - アドレスバーに `bex ` 入力 → サジェスト一覧表示 ✅ (`onInputStarted` / `onInputChanged` 動作)
-  - 続けて文字入力 → サジェストがフィルタされる ✅
-  - **Enter キー押下 → 何も起きない / または Chrome のフォールバックで「このサイトにアクセスできません」**
-  - **サジェスト項目をタップ → これも何も起きない**
-  - 結果: `chrome.tabs.update({url})` が呼ばれず、ナビゲーションも遷移も発生しない
-- **Patch 14 の実装内容** (パッチ作成済み・適用済み):
+### #10 Omnibox — PASS（真因判明・1行修正適用済み、リビルド検証待ち）
+- **当初の症状**: アドレスバーに `bex ` 入力 → サジェスト表示・フィルタは動作するが、Enter / サジェストタップ後も**画面が変わらない**ように見えていた
+- **真因 (2026-06-08 確定): サジェスト一覧がページを覆っていただけ**
+  - `onInputEntered` は Service Worker まで正常に発火していた
+  - 拡張機能側の `chrome.tabs.update({url})` も正常に動作し、現在タブは目的 URL へ遷移・commit していた（logcat で `status:complete` と目的 URL を確認）
+  - しかし**サジェスト一覧 (omnibox) が閉じないまま遷移後のページを覆っていた**ため、「何も起きない」ように見えていた。手でサジェストを閉じると裏に目的ページが表示されている状態で確定
+- **原因コード**: `AutocompleteMediator.loadUrlForOmniboxMatch` の extension 分岐が `return` で早期離脱し、通常経路が末尾で呼ぶ `mHandler.post(this::finishInteraction)` をスキップしていた
+  - `finishInteraction()` = `mDelegate.clearOmniboxFocus()` + `SuggestionListProperties.CONTAINER_ALWAYS_VISIBLE = false`（フォーカス解除 + サジェスト非表示）
+  - Chromium 側のコメントにも「Android T で focus イベントが失われ Suggestions list が view を覆う」既知問題として明記されている
+- **修正内容 (適用済み)**: extension 分岐の `return` 直前に `mHandler.post(this::finishInteraction);` を1行追加し、通常経路と同じ omnibox 解除を行う
+  - 適用スクリプト: `scripts/add-patch14-omnibox-dismiss-fix.py`（冪等）
+- **Patch 14 の実装内容** (正常動作を確認済み):
   - C++: `AutocompleteControllerAndroid::ProcessExtensionKeywordMatch` 追加（extension keyword の match を検出して `ExtensionOmniboxEventRouter::OnInputEntered` を発火）
   - Java: `AutocompleteController.processExtensionKeywordMatch` 追加 (JNI bridge)
-  - Java: `AutocompleteMediator.loadUrlFromOmniboxMatch` で extension keyword 判定 + 早期 return
-- **仮説の絞り込み** (2026-06-01 追加):
-  - **タップとEnter の両方が発火しない**ことから、Patch 14 が修正を入れた `AutocompleteMediator.loadUrlFromOmniboxMatch` は **Android omnibox の選択確定経路ではない**可能性が高い。
-  - 実際の経路は `SuggestionListMediator.onItemSelected` または `OmniboxSuggestionsAdapter.onSuggestionClicked` のような別レイヤーである可能性。
-  - 別仮説として、`loadUrlFromOmniboxMatch` は呼ばれているが、`processExtensionKeywordMatch` の中で `template_url->type() != OMNIBOX_API_EXTENSION` で false を返している ケースも残るが、その場合は早期 return せず通常ナビゲーションが走る (「アクセスできません」が出る)
-  - 両症状が混在しているのは、入力タイミング/タブ状態によってフローが変わる可能性
-- **次のアクション**:
-  1. Service Worker / Native の logcat 確認（Service Worker の `console.log("[mobile-bex] Omnibox entered: ...")` が出ているかが一次切り分け）
-  2. **Java 側のフック地点の見直し** — `AutocompleteMediator.loadUrlFromOmniboxMatch` 以外で Enter / タップ確定が処理される経路を探す
-  3. C++ 側に `LOG(ERROR)` を仕込んで `ProcessExtensionKeywordMatch` が呼ばれているか確認
+  - Java: `AutocompleteMediator.loadUrlForOmniboxMatch` で extension keyword 判定 + 早期 return
+- **ステータス**: **リビルド検証待ち**。`autoninja -C out/MobileBex chrome_public_apk` → APK 入れ替え後、`bex https://example.com` をタップして**サジェストが自動で閉じ**現在タブが遷移すれば完了
+- **廃棄した仮説（記録用）**: 一時「Java 側のフック地点が違う」「`chrome.tabs.update` が desktop-android では遷移しない」と疑ったが、いずれも誤り。tabs API はスタブではなく正常に配線されている
 
 ## 既知の派生課題
 
 ### test-extension-options のCSP問題（修正済み）
 - 当初 popup.html にインラインスクリプトがあり Manifest V3 の CSP違反
-- popup.js への分離で解決済み（修正コミット候補）
+- popup.js への分離で解決済み（コミット済み）
 
 ### Service Worker の初回起動遅延 (Side Panel)
 - 拡張機能が登録された直後の最初の操作は失敗することがある
@@ -118,11 +115,11 @@
 
 ## 次のステップ
 
-1. **未コミット作業を正式にコミット** — Patch 13 (メニューアイコン)、Phase 3b 修正 3 件 (Options/NewTab/DevTools部分)、`fix_viewmodel.py` の SidePanel 拡張対応
-2. **Patch 14 (Omnibox) のデバッグ** — Service Worker のログ確認 → Java/C++ 側調整
+1. **リビルド検証** — Omnibox のサジェスト非表示修正（`finishInteraction` 1行追加）と、`proprietary_codecs = true` / `ffmpeg_branding = "Chrome"` を入れたビルド構成の実機確認
+2. **Patch 14 への修正取り込みとデバッグログ撤去** — 検証完了後、`finishInteraction` 修正を `patches/phase3/14-omnibox-input-entered.patch` に反映し、調査用に仕込んだ `[BEX]` ログを撤去してクリーンビルド
 3. **DevTools Panel のハング根治** — 起動シーケンス中の DevTools 初期化コードパス全洗い出し + 追加パッチ
-4. **test-extension-options の popup.js 分離** をテスト拡張機能側にコミット (CSP 修正)
-5. **Context Menu の selection コンテキスト統合** — Android テキスト選択 UI と拡張機能 contextMenus の橋渡し（要 Chromium Android 側調査）
+4. **Context Menu の selection コンテキスト統合** — Android テキスト選択 UI と拡張機能 contextMenus の橋渡し（要 Chromium Android 側調査）
+5. **積み残しの未検証項目** — CRX/zip インストール、Chrome Web Store からのインストール、複数拡張機能の同時動作（Phase 1/2 から持ち越し、Phase 3 でも未着手）
 
 ## テスト拡張機能一覧 (参考)
 
@@ -135,6 +132,6 @@
 | `test-extension-options` | Options Page | Popup → Open Options Page → 新タブで options.html |
 | `test-extension-newtab` | New Tab Override | タブバーの「+」で新規タブ → カスタムページ |
 | `test-extension-devtools` | DevTools Panel | **読み込み禁止 (Chromium起動阻害)** |
-| `test-extension-omnibox` | Omnibox | アドレスバーに `bex ` 入力 |
+| `test-extension-omnibox` | Omnibox | アドレスバーに `bex <URL>` 入力 → サジェストをタップ |
 | `test-extension-contextmenu` | Context Menu | ページ/リンク/画像長押し (selection 不可) |
 | `test-extension-notifications` | Notifications | Popup → 通知ボタン |

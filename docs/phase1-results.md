@@ -66,3 +66,6 @@ args.gn: is_desktop_android = true
 - CRX/zipからのインストール
 - Chrome Web Storeからのインストール
 - 複数拡張機能の同時動作
+
+**注**: 上記のうち「CRX/zipからのインストール」「Chrome Web Storeからのインストール」
+「複数拡張機能の同時動作」は Phase 2・Phase 3 でも検証されておらず、未確認のまま残っている。

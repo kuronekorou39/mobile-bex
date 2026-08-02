@@ -3,7 +3,6 @@
   "name": "mobile-bex Omnibox Test",
   "version": "1.0.0",
   "description": "Tests omnibox (address bar) keyword suggestions",
-  "permissions": ["tabs"],
   "omnibox": {
     "keyword": "bex"
   },

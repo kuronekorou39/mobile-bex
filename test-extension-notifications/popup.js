@@ -1,5 +1,13 @@
 const status = document.getElementById("status");
 
+// 通知アイコン: Chrome の通知は SVG をデコードできないため 16x16 の単色 PNG を使う
+const ICON_BLUE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mNQTX5NEmIY1TCqYfhqAAB2SXMQ7LkbdQAAAABJRU5ErkJggg==";
+const ICON_GREEN =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mNQOhpHEmIY1TCqYfhqAACML0UQHDyfkAAAAABJRU5ErkJggg==";
+const ICON_RED =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mO4o6ZGEmIY1TCqYfhqAAATqigQ9kvG0QAAAABJRU5ErkJggg==";
+
 function log(msg) {
   status.textContent = msg;
   console.log("[mobile-bex] Notifications:", msg);
@@ -9,9 +17,7 @@ function log(msg) {
 document.getElementById("basic").addEventListener("click", () => {
   chrome.notifications.create("basic-test", {
     type: "basic",
-    iconUrl: "data:image/svg+xml," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="8" fill="#2563eb"/><text x="24" y="32" text-anchor="middle" fill="white" font-size="24" font-family="sans-serif">B</text></svg>'
-    ),
+    iconUrl: ICON_BLUE,
     title: "BEX Test Notification",
     message: "This is a basic notification from mobile-bex!",
     priority: 2
@@ -26,9 +32,7 @@ document.getElementById("basic").addEventListener("click", () => {
 document.getElementById("progress").addEventListener("click", () => {
   chrome.notifications.create("progress-test", {
     type: "progress",
-    iconUrl: "data:image/svg+xml," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="8" fill="#22c55e"/><text x="24" y="32" text-anchor="middle" fill="white" font-size="20" font-family="sans-serif">%</text></svg>'
-    ),
+    iconUrl: ICON_GREEN,
     title: "Download Progress",
     message: "Downloading extension data...",
     progress: 65
@@ -43,9 +47,7 @@ document.getElementById("progress").addEventListener("click", () => {
 document.getElementById("buttons").addEventListener("click", () => {
   chrome.notifications.create("buttons-test", {
     type: "basic",
-    iconUrl: "data:image/svg+xml," + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="8" fill="#dc2626"/><text x="24" y="32" text-anchor="middle" fill="white" font-size="24" font-family="sans-serif">!</text></svg>'
-    ),
+    iconUrl: ICON_RED,
     title: "Action Required",
     message: "Do you want to proceed?",
     buttons: [

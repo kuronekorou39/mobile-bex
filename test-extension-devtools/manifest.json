@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "mobile-bex DevTools Panel Test",
+  "name": "[DO NOT LOAD] DevTools Test (起動ハング注意)",
   "version": "1.0.0",
-  "description": "Tests adding a custom panel to Chrome DevTools",
+  "description": "Tests adding a custom panel to Chrome DevTools. 【警告】読み込むとChromiumが起動しなくなる。復旧は scripts/strip-devtools-extension.py",
   "permissions": ["tabs", "scripting", "activeTab"],
   "action": {
     "default_title": "Open DevTools Panel"

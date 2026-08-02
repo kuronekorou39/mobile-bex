@@ -45,18 +45,19 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   console.log("[mobile-bex] Context menu clicked:", info.menuItemId, info);
 
+  // tab が渡らないケース（拡張機能ページ上のクリック等）では何もしない
+  if (!tab || tab.id === undefined) {
+    console.warn("[mobile-bex] No tab for this click, ignoring");
+    return;
+  }
+
   switch (info.menuItemId) {
     case "bex-page-info":
-      chrome.tabs.sendMessage(tab.id, {
-        type: "SHOW_ALERT",
-        message: `Page: ${tab.title}\nURL: ${tab.url}`
-      }).catch(() => {
-        // Content script not injected, open as alert via scripting
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: (msg) => alert(msg),
-          args: [`[BEX Context Menu Test]\n\nPage: ${tab.title}\nURL: ${tab.url}`]
-        });
+      // この拡張は content script を持たないため executeScript で直接注入する
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (msg) => alert(msg),
+        args: [`[BEX Context Menu Test]\n\nPage: ${tab.title}\nURL: ${tab.url}`]
       });
       break;
 

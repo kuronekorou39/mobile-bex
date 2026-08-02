@@ -3,7 +3,6 @@
   "name": "mobile-bex New Tab Override Test",
   "version": "1.0.0",
   "description": "Tests replacing the new tab page with a custom extension page",
-  "permissions": ["tabs"],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   }

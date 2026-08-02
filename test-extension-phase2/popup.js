@@ -36,13 +36,24 @@ chrome.runtime.sendMessage({ type: "getResults" }, (response) => {
 // Test chrome.tabs.query
 chrome.runtime.sendMessage({ type: "getTabs" }, (response) => {
   if (chrome.runtime.lastError || !response) {
-    tabsList.innerHTML = "<div>chrome.tabs.query: FAILED</div>";
+    tabsList.textContent = "chrome.tabs.query: FAILED";
     return;
   }
 
-  let html = `<div><strong>Tabs (${response.tabCount}):</strong></div>`;
+  // タイトルやURLに "<" が含まれても壊れないよう textContent で組み立てる
+  tabsList.textContent = "";
+
+  const header = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = `Tabs (${response.tabCount}):`;
+  header.appendChild(strong);
+  tabsList.appendChild(header);
+
   response.tabs.forEach((tab) => {
-    html += `<div>${tab.title || "(no title)"}<br>${tab.url || "(no url)"}</div>`;
+    const div = document.createElement("div");
+    div.appendChild(document.createTextNode(tab.title || "(no title)"));
+    div.appendChild(document.createElement("br"));
+    div.appendChild(document.createTextNode(tab.url || "(no url)"));
+    tabsList.appendChild(div);
   });
-  tabsList.innerHTML = html;
 });

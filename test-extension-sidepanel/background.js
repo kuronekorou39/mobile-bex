@@ -3,7 +3,16 @@
 
 const results = {};
 
+// open/close には実在するタブIDが必要（tabId: 0 は存在しないタブ）
+async function getActiveTabId() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab ? tab.id : undefined;
+}
+
 async function runTests() {
+  const activeTabId = await getActiveTabId();
+  results.activeTabId = activeTabId;
+
   // Test 1: setOptions
   try {
     await chrome.sidePanel.setOptions({ path: "sidepanel.html" });
@@ -45,7 +54,10 @@ async function runTests() {
 
   // Test 5: open
   try {
-    await chrome.sidePanel.open({ tabId: 0 });
+    if (activeTabId === undefined) {
+      throw new Error("No active tab found");
+    }
+    await chrome.sidePanel.open({ tabId: activeTabId });
     results.open = true;
   } catch (e) {
     results.open = false;
@@ -64,7 +76,10 @@ async function runTests() {
 
   // Test 7: close
   try {
-    await chrome.sidePanel.close({ tabId: 0 });
+    if (activeTabId === undefined) {
+      throw new Error("No active tab found");
+    }
+    await chrome.sidePanel.close({ tabId: activeTabId });
     results.close = true;
   } catch (e) {
     results.close = false;

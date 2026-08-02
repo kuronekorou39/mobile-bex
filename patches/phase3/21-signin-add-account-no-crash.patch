@@ -1,0 +1,21 @@
+# Patch 21: アカウント追加でのクラッシュ防止
+# ChromePublic は NullAccountManagerDelegate のため createAddAccountIntent が
+# UnsupportedOperationException を投げていた。null 返却で既存のエラー処理に乗せる。
+# (Google アカウント統合/Sync 自体は公式 Chrome 限定のため実装不可)
+diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
+index fcf64ef942..a30dd1a432 100644
+--- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
++++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
+@@ -50,8 +50,10 @@ public class NullAccountManagerDelegate implements AccountManagerDelegate {
+     @Override
+     public void createAddAccountIntent(
+             @Nullable String prefilledEmail, Callback<@Nullable Intent> callback) {
+-        throw new UnsupportedOperationException(
+-                "NullAccountManagerDelegate does not implement createAddAccountIntent");
++        // mobile-bex: sign-in UI が露出しているためクラッシュさせず null を返す。
++        // 呼び出し側 (AccountPickerBottomSheetMediator 等) は null intent を
++        // 「アカウント追加不可」としてハンドリングする。
++        callback.onResult(null);
+     }
+ 
+     @Override

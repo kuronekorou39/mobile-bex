@@ -18,6 +18,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# --no-history は shallow clone のため、特定バージョンの checkout ができない
+if [[ -n "$NO_HISTORY" && -n "$CHROMIUM_VERSION" ]]; then
+  echo "ERROR: --no-history と --chromium-version は併用できません"
+  echo "  (shallow clone にはタグの対象コミットが含まれないため checkout が失敗します)"
+  exit 1
+fi
+
 echo "=== mobile-bex: Chromium Android ビルド環境セットアップ ==="
 echo "Chromium directory: $CHROMIUM_DIR"
 echo ""
@@ -42,25 +49,33 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 # --- 2. Disk space check ---
-AVAILABLE_GB=$(df -BG "$HOME" | awk 'NR==2{print $4}' | tr -d 'G')
+AVAILABLE_GB=$(df -BG --output=avail "$HOME" | tail -1 | tr -dc '0-9')
 if (( AVAILABLE_GB < 100 )); then
   echo "WARNING: ディスク空き容量が ${AVAILABLE_GB}GB です (推奨: 150GB以上)"
-  echo "続行しますか? [y/N]"
-  read -r response
-  [[ "$response" =~ ^[Yy]$ ]] || exit 1
+  if [[ -t 0 ]]; then
+    echo "続行しますか? [y/N]"
+    read -r response
+    [[ "$response" =~ ^[Yy]$ ]] || exit 1
+  else
+    echo "非対話実行のため中断します（容量を確保するか、対話シェルから実行してください）"
+    exit 1
+  fi
 fi
 
 # --- 3. depot_tools ---
-if ! command -v gclient &>/dev/null; then
+if [[ ! -d "$HOME/depot_tools" ]]; then
   echo ">>> depot_tools をインストール中..."
-  if [[ ! -d "$HOME/depot_tools" ]]; then
-    git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$HOME/depot_tools"
-  fi
-  export PATH="$PATH:$HOME/depot_tools"
-  echo 'export PATH="$PATH:$HOME/depot_tools"' >> "$HOME/.bashrc"
-  echo "depot_tools を PATH に追加しました"
+  git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$HOME/depot_tools"
+fi
+export PATH="$PATH:$HOME/depot_tools"
+# PATH は ~/.profile に書く。~/.bashrc は冒頭の non-interactive guard で
+# `wsl -e bash` 等の非対話シェルから読まれないため効かない。
+# 追記はファイル内容で判定して冪等にする。
+if ! grep -qF 'depot_tools' "$HOME/.profile" 2>/dev/null; then
+  echo 'export PATH="$PATH:$HOME/depot_tools"' >> "$HOME/.profile"
+  echo "depot_tools を ~/.profile の PATH に追加しました"
 else
-  echo ">>> depot_tools: OK"
+  echo ">>> depot_tools: PATH 設定済み"
 fi
 
 # --- 4. Chromium source ---
@@ -108,8 +123,13 @@ export CCACHE_SLOPPINESS=time_macros
 
 # --- 9. Create symlink to project ---
 LINK_PATH="$CHROMIUM_DIR/mobile-bex"
-if [[ ! -L "$LINK_PATH" ]]; then
-  ln -sf "$PROJECT_ROOT" "$LINK_PATH"
+if [[ -L "$LINK_PATH" ]]; then
+  : # 作成済み
+elif [[ -e "$LINK_PATH" ]]; then
+  # 実ディレクトリが既にあると ln -sf はその中にリンクを作ってしまう
+  echo "WARNING: $LINK_PATH が既に存在します（シンボリックリンクではありません）。リンク作成をスキップ"
+else
+  ln -s "$PROJECT_ROOT" "$LINK_PATH"
   echo ">>> シンボリックリンク作成: $LINK_PATH -> $PROJECT_ROOT"
 fi
 

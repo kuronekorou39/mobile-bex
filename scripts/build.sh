@@ -1,6 +1,7 @@
 #!/bin/bash
 # mobile-bex: Chromium Android ビルドスクリプト
-# Usage: ./scripts/build.sh [--setup] [--target TARGET] [--cpu CPU] [--release]
+# Usage: ./scripts/build.sh [--setup] [--target TARGET] [--cpu CPU] [--release] [--out DIR]
+#   --out は src からの相対パス（デフォルト: out/MobileBex）
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,9 +25,20 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$OUT_DIR" == /* ]]; then
+  echo "ERROR: --out は src からの相対パスで指定してください (例: out/MobileBex)"
+  exit 1
+fi
+
 if [[ ! -d "$CHROMIUM_SRC" ]]; then
   echo "ERROR: Chromiumソースが見つかりません: $CHROMIUM_SRC"
   exit 1
+fi
+
+# 非対話シェル（wsl -e bash 等）では ~/.profile が読まれず depot_tools が
+# PATH に無いことがあるため、ここで補う
+if ! command -v gn &>/dev/null && [[ -d "$HOME/depot_tools" ]]; then
+  export PATH="$PATH:$HOME/depot_tools"
 fi
 
 cd "$CHROMIUM_SRC"
@@ -65,6 +77,13 @@ is_component_build = false
 is_official_build = false
 is_chrome_branded = false
 is_java_debug = true
+
+# 非officialビルドはデフォルトで DCHECK / Java assert が有効になり、
+# 上流の実験的コード (desktop-android) の assert を踏むたびにクラッシュする
+# (実例: GPU watchdog の !is_backgrounded_ DCHECK、FrozenNativePage.getView の
+#  AssertionError)。日常使用に耐えるようリリース版 Chrome 相当に無効化する。
+dcheck_always_on = false
+enable_java_asserts = false
 ARGS_EOF
   fi
 
@@ -114,9 +133,23 @@ setup_build() {
 
 # --- Build ---
 run_build() {
-  if [[ ! -f "$CHROMIUM_SRC/$OUT_DIR/args.gn" ]]; then
+  local args_file="$CHROMIUM_SRC/$OUT_DIR/args.gn"
+  if [[ ! -f "$args_file" ]]; then
     echo "ビルド設定が見つかりません。先にセットアップします..."
     setup_build
+  else
+    # 既存 args.gn と指定フラグの食い違いを黙って無視しない
+    local cur_cpu cur_official want_official
+    cur_cpu=$(grep -oP 'target_cpu\s*=\s*"\K[^"]+' "$args_file" || true)
+    cur_official=$(grep -oP 'is_official_build\s*=\s*\K\w+' "$args_file" || true)
+    want_official=$($IS_RELEASE && echo true || echo false)
+    if [[ -n "$cur_cpu" && "$cur_cpu" != "$TARGET_CPU" ]] \
+       || [[ -n "$cur_official" && "$cur_official" != "$want_official" ]]; then
+      echo "ERROR: 既存の $OUT_DIR/args.gn (cpu=$cur_cpu, official=$cur_official) と"
+      echo "       指定フラグ (cpu=$TARGET_CPU, official=$want_official) が一致しません。"
+      echo "       設定を変える場合は先に ./scripts/build.sh --setup を同じフラグ付きで実行してください。"
+      exit 1
+    fi
   fi
 
   echo ""

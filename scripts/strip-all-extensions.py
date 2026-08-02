@@ -5,12 +5,15 @@ splash screen because of one or more extensions."""
 import json
 import subprocess
 import sys
+import time
 
 ADB = r'C:\Android\platform-tools\adb.exe'
 SERIAL = '54231JEBF06373'
 PKG = 'org.chromium.chrome'
 REMOTE_PATH = f'/data/data/{PKG}/app_chrome/Default/Preferences'
-LOCAL_BACKUP = r'C:\projects\mobile-bex\Preferences.allext.backup.json'
+# タイムスタンプ付きにして上書き破壊を防ぐ（2回実行すると拡張ゼロの状態で
+# バックアップが潰れ、bisect-extensions.py の比較元も失われるため）
+LOCAL_BACKUP = rf'C:\projects\mobile-bex\Preferences.allext.backup.{time.strftime("%Y%m%d-%H%M%S")}.json'
 LOCAL_FIXED = r'C:\projects\mobile-bex\Preferences.noext.json'
 DEVICE_TMP = '/data/local/tmp/Preferences.noext.json'
 
@@ -93,7 +96,7 @@ print(f"  wc -c: {r.stdout.decode().strip()}")
 print()
 print("Step 7: force-stop + start Chromium...")
 adb('shell', 'am', 'force-stop', PKG)
-import time; time.sleep(1)
+time.sleep(1)
 r = adb('shell', 'am', 'start', '-n', f'{PKG}/com.google.android.apps.chrome.Main')
 print(f"  {r.stdout.decode().strip()}")
 

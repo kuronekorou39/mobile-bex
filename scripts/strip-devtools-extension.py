@@ -7,12 +7,14 @@ import json
 import subprocess
 import sys
 import os
+import time
 
 ADB = r'C:\Android\platform-tools\adb.exe'
 SERIAL = '54231JEBF06373'
 PKG = 'org.chromium.chrome'
 REMOTE_PATH = f'/data/data/{PKG}/app_chrome/Default/Preferences'
-LOCAL_BACKUP = r'C:\projects\mobile-bex\Preferences.backup.json'
+# タイムスタンプ付きにして上書き破壊を防ぐ
+LOCAL_BACKUP = rf'C:\projects\mobile-bex\Preferences.backup.{time.strftime("%Y%m%d-%H%M%S")}.json'
 LOCAL_FIXED = r'C:\projects\mobile-bex\Preferences.fixed.json'
 SDCARD_TMP = '/sdcard/Preferences.fixed.json'
 
@@ -67,10 +69,6 @@ print()
 print("Step 3: Remove from extensions.settings...")
 for ext_id, *_ in to_remove:
     del ext_settings[ext_id]
-
-# Also clean other extension-related index keys if present
-for key in ['install_signature', 'pinned_extensions', 'toolbar', 'last_chrome_version']:
-    pass
 
 # Clean extensions.toolbar (pinned/order list) if it references removed ids
 toolbar = data.get('extensions', {}).get('toolbar', None)

@@ -4,4 +4,5 @@
 # Local debug artifacts (Preferences backups, screenshots, transient zips)
 Preferences*.json
 bex-screen*.png
+test-extension*.zip
 test-extensions-all-*.zip

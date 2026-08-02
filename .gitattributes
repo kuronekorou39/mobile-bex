@@ -1,0 +1,13 @@
+# WSL/Linux で実行・適用するファイルは必ず LF で checkout する
+# (core.autocrlf=true の環境で clone すると CRLF 化して bash / git apply が全滅するため)
+*.sh    text eol=lf
+*.patch text eol=lf
+*.py    text eol=lf
+
+# Windows 側で実行するもの
+*.ps1   text eol=crlf
+
+# バイナリ
+*.png   binary
+*.zip   binary
+*.apk   binary

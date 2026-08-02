@@ -142,10 +142,10 @@ index 0000000..d18b94c
 +}
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
 new file mode 100644
-index 0000000..5766d9f
+index 0000000..f380efa
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,183 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -159,8 +159,11 @@ index 0000000..5766d9f
 +import org.chromium.base.version_info.VersionInfo;
 +import org.chromium.build.annotations.NullMarked;
 +import org.chromium.build.annotations.Nullable;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetObserver;
++import org.chromium.components.browser_ui.bottomsheet.EmptyBottomSheetObserver;
 +import org.chromium.components.embedder_support.view.ContentView;
 +import org.chromium.components.thinwebview.ThinWebView;
 +import org.chromium.components.thinwebview.ThinWebViewConstraints;
@@ -184,6 +187,7 @@ index 0000000..5766d9f
 +    private @Nullable ExtensionBottomSheetContent mSheetContent;
 +    private @Nullable ThinWebView mThinWebView;
 +    private @Nullable ExtensionActionPopupContents mContents;
++    private @Nullable BottomSheetObserver mSheetObserver;
 +    private boolean mIsHiding;
 +
 +    /**
@@ -198,6 +202,10 @@ index 0000000..5766d9f
 +        if (activityRef == null) return false;
 +        Activity activity = activityRef.get();
 +        if (activity == null || activity.isFinishing()) return false;
++
++        // コーディネータが再利用された場合に前回の hide でセットされたままの
++        // フラグを戻す (true のままだと以後 hide() が無効になる)。
++        mIsHiding = false;
 +
 +        mBottomSheetController = BottomSheetControllerProvider.from(windowAndroid);
 +        if (mBottomSheetController == null) return false;
@@ -256,6 +264,20 @@ index 0000000..5766d9f
 +            return false;
 +        }
 +
++        // スワイプダウンなど hide() を経由しない閉じ方はここでしか検知できない。
++        // 検知せずに放置すると WebContents が生存し続け、拡張機能のポップアップ JS
++        // が不可視のまま動き続ける。
++        mSheetObserver =
++                new EmptyBottomSheetObserver() {
++                    @Override
++                    public void onSheetContentChanged(@Nullable BottomSheetContent newContent) {
++                        if (newContent != mSheetContent) {
++                            hide();
++                        }
++                    }
++                };
++        mBottomSheetController.addObserver(mSheetObserver);
++
 +        mSheetContent.getContentView().post(() -> {
 +            if (mContents != null) {
 +                mContents.loadInitialPage();
@@ -282,6 +304,11 @@ index 0000000..5766d9f
 +    }
 +
 +    private void cleanup() {
++        if (mBottomSheetController != null && mSheetObserver != null) {
++            mBottomSheetController.removeObserver(mSheetObserver);
++        }
++        mSheetObserver = null;
++
 +        // Destroy contents first (destroys native ExtensionViewHost + WebContents).
 +        // The ThinWebView's native side holds only a raw pointer to WebContents
 +        // that becomes invalid after contents.destroy(), so destroy contents
@@ -303,7 +330,7 @@ index 0000000..5766d9f
 +    }
 +}
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
-index d1a8f85..27049c1 100644
+index d1a8f85..dcaa2d6 100644
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
 @@ -24,6 +24,7 @@ import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
@@ -339,7 +366,7 @@ index d1a8f85..27049c1 100644
          assert mCurrentPopup == null;
          mExtensionsToolbarBridge.removeObserver(mToolbarObserver);
          mExtensionsToolbarBridge.setDelegate(null);
-@@ -250,27 +251,24 @@ class ExtensionActionListMediator implements Destroyable {
+@@ -250,27 +251,25 @@ class ExtensionActionListMediator implements Destroyable {
      }
  
      private void triggerPopup(String actionId, long nativeHostPtr) {
@@ -362,6 +389,7 @@ index d1a8f85..27049c1 100644
              contents.destroy();
 -            return;
 +            mCurrentSheetCoordinator = null;
++            mCurrentPopupActionId = null;
          }
 +    }
  
@@ -379,6 +407,27 @@ index d1a8f85..27049c1 100644
      }
  
      private void onContextClick(String actionId) {
+@@ -299,6 +298,12 @@ class ExtensionActionListMediator implements Destroyable {
+     }
+ 
+     private void closePopup() {
++        // BottomSheet 方式では mCurrentPopup は常に null のため、旧実装の
++        // 早期 return だとシートが閉じられず、拡張機能のアンインストール時等に
++        // 破棄済み ExtensionHost を表示したままのシートが残る。シート側を必ず閉じる。
++        closeCurrentSheet();
++        mCurrentPopupActionId = null;
++
+         if (mCurrentPopup == null) {
+             return;
+         }
+@@ -307,7 +312,6 @@ class ExtensionActionListMediator implements Destroyable {
+         ExtensionActionPopup popup = mCurrentPopup;
+         mCurrentPopup = null;
+         popup.destroy();
+-        mCurrentPopupActionId = null;
+     }
+ 
+     /**
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java
 index 2127b66..98cbbbb 100644
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionPopup.java
@@ -403,3 +452,21 @@ index 2127b66..98cbbbb 100644
          // Set the content size to the minimum initially.
          mPopupWindow.setDesiredContentSize(
                  resources.getDimensionPixelSize(R.dimen.extension_action_popup_min_width),
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java
+index 39d85e1..8d2c3f9 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java
+@@ -27,8 +27,11 @@ public class ExtensionsMenuItemViewBinder {
+         } else if (key == ExtensionsMenuItemProperties.ICON) {
+             ImageView iconView = view.findViewById(R.id.extensions_menu_item_icon);
+             Bitmap bitmap = model.get(ExtensionsMenuItemProperties.ICON);
+-            // TODO: Investigate the correct resizing method.
+-            bitmap.setDensity(120);
++            // C++ 側が端末スケール分の物理ピクセル (24dp × scale) で描画した
++            // ビットマップを渡してくるため、端末の実密度を指定すると
++            // ちょうど 24dp 相当で等倍表示になる (固定値 120 だと数倍に
++            // 拡大されてぼける)。
++            bitmap.setDensity(iconView.getResources().getDisplayMetrics().densityDpi);
+             iconView.setImageBitmap(bitmap);
+         } else if (key == ExtensionsMenuItemProperties.CLICK_LISTENER) {
+             view.findViewById(R.id.extensions_menu_item_context_menu)

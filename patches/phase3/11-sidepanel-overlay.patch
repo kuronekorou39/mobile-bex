@@ -112,10 +112,10 @@ index 0000000..1b52209
 +</resources>
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java
 new file mode 100644
-index 0000000..d2f0a26
+index 0000000..217bbc4
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,83 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -132,6 +132,7 @@ index 0000000..d2f0a26
 +import org.chromium.base.Log;
 +import org.chromium.build.annotations.NullMarked;
 +import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.browser.profiles.Profile;
 +import org.chromium.ui.base.WindowAndroid;
 +import org.chromium.content_public.browser.WebContents;
 +
@@ -173,10 +174,19 @@ index 0000000..d2f0a26
 +            return;
 +        }
 +
++        // 呼び出し元タブのプロファイルを使う。通常プロファイル固定にすると
++        // シークレットタブからの呼び出しでシークレット中の内容が通常側の
++        // ストレージ/Cookie に紐づいてしまう。
++        Profile profile = Profile.fromWebContents(senderWebContents);
++        if (profile == null) {
++            Log.w(TAG, "No Profile available from sender WebContents");
++            return;
++        }
++
 +        if (sCoordinator == null) {
 +            sCoordinator = new ExtensionSidePanelCoordinator();
 +        }
-+        sCoordinator.show(activity, windowAndroid, url);
++        sCoordinator.show(activity, windowAndroid, profile, url);
 +    }
 +
 +    /**
@@ -191,10 +201,10 @@ index 0000000..d2f0a26
 +}
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java
 new file mode 100644
-index 0000000..d784be4
+index 0000000..a642731
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,180 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -210,14 +220,14 @@ index 0000000..d784be4
 +import android.view.WindowManager;
 +import android.widget.FrameLayout;
 +
++import org.chromium.base.ActivityState;
++import org.chromium.base.ApplicationStatus;
 +import org.chromium.base.Log;
 +import org.chromium.base.version_info.VersionInfo;
-+import org.chromium.build.NullUtil;
 +import org.chromium.build.annotations.NullMarked;
 +import org.chromium.build.annotations.Nullable;
 +import org.chromium.chrome.browser.content.WebContentsFactory;
 +import org.chromium.chrome.browser.profiles.Profile;
-+import org.chromium.chrome.browser.profiles.ProfileManager;
 +import org.chromium.components.embedder_support.view.ContentView;
 +import org.chromium.components.thinwebview.ThinWebView;
 +import org.chromium.components.thinwebview.ThinWebViewConstraints;
@@ -242,18 +252,18 @@ index 0000000..d784be4
 +    private @Nullable Dialog mDialog;
 +    private @Nullable ThinWebView mThinWebView;
 +    private @Nullable WebContents mWebContents;
++    private ApplicationStatus.@Nullable ActivityStateListener mActivityStateListener;
 +
 +    /**
 +     * Shows the side panel overlay.
 +     *
 +     * @param activity The current Activity.
 +     * @param windowAndroid The WindowAndroid for creating ThinWebView.
++     * @param profile The profile of the calling tab (may be incognito).
 +     * @param url The chrome-extension:// URL to load in the side panel.
 +     */
-+    public void show(Activity activity, WindowAndroid windowAndroid, String url) {
++    public void show(Activity activity, WindowAndroid windowAndroid, Profile profile, String url) {
 +        hide();
-+
-+        Profile profile = ProfileManager.getLastUsedRegularProfile();
 +
 +        // Create WebContents for the side panel page.
 +        mWebContents =
@@ -284,10 +294,15 @@ index 0000000..d784be4
 +        // Set background to black (same fix as BottomSheet).
 +        mThinWebView.getView().setBackgroundColor(Color.BLACK);
 +
-+        // Calculate dialog width = 70% of screen width.
-+        Point displaySize = new Point();
-+        activity.getWindowManager().getDefaultDisplay().getSize(displaySize);
-+        int panelWidth = (int) (displaySize.x * WIDTH_RATIO);
++        // Calculate dialog width = 70% of the app window width. Display size は
++        // 分割画面で自ウィンドウより大きくなるため、decorView 幅を優先する。
++        int windowWidth = activity.getWindow().getDecorView().getWidth();
++        if (windowWidth <= 0) {
++            Point displaySize = new Point();
++            activity.getWindowManager().getDefaultDisplay().getSize(displaySize);
++            windowWidth = displaySize.x;
++        }
++        int panelWidth = (int) (windowWidth * WIDTH_RATIO);
 +
 +        // Create the container layout.
 +        FrameLayout container = new FrameLayout(activity);
@@ -318,7 +333,25 @@ index 0000000..d784be4
 +            window.getAttributes().windowAnimations = R.style.ExtensionSidePanelAnimation;
 +        }
 +
-+        mDialog.show();
++        // 画面回転等で Activity が再生成されると Dialog が死んだ Window に
++        // 紐づいたまま dismiss リスナが発火せず、WebContents が native ごと
++        // リークする。DESTROYED を監視して確実に破棄する。
++        mActivityStateListener =
++                (destroyedActivity, newState) -> {
++                    if (newState == ActivityState.DESTROYED) {
++                        cleanup();
++                    }
++                };
++        ApplicationStatus.registerStateListenerForActivity(mActivityStateListener, activity);
++
++        try {
++            mDialog.show();
++        } catch (WindowManager.BadTokenException e) {
++            // Activity の Window が既に無効 (バックグラウンド遷移直後など)。
++            Log.w(TAG, "Failed to show side panel dialog", e);
++            cleanup();
++            return;
++        }
 +
 +        // Load the side panel URL.
 +        mWebContents.getNavigationController().loadUrl(new LoadUrlParams(url));
@@ -328,11 +361,19 @@ index 0000000..d784be4
 +    public void hide() {
 +        if (mDialog != null && mDialog.isShowing()) {
 +            mDialog.dismiss();
++            // cleanup() is called by the dismiss listener.
++        } else {
++            // Dialog 未表示 (show 失敗直後や既に死んだ Window) でも
++            // WebContents は生きているため、明示的に破棄する。
++            cleanup();
 +        }
-+        // cleanup() is called by the dismiss listener.
 +    }
 +
 +    private void cleanup() {
++        if (mActivityStateListener != null) {
++            ApplicationStatus.unregisterActivityStateListener(mActivityStateListener);
++            mActivityStateListener = null;
++        }
 +        if (mThinWebView != null) {
 +            mThinWebView.destroy();
 +            mThinWebView = null;

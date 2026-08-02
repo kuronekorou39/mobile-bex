@@ -44,11 +44,14 @@ fi
 cd "$CHROMIUM_SRC"
 
 # --- Generate args.gn ---
+# 第1引数に出力先を指定できる（省略時は $OUT_DIR/args.gn）。
 generate_args() {
-  local args_file="$CHROMIUM_SRC/$OUT_DIR/args.gn"
-  mkdir -p "$CHROMIUM_SRC/$OUT_DIR"
+  local args_file="${1:-$CHROMIUM_SRC/$OUT_DIR/args.gn}"
+  mkdir -p "$(dirname "$args_file")"
 
-  echo ">>> args.gn を生成中: $args_file"
+  if [[ "$args_file" == "$CHROMIUM_SRC/$OUT_DIR/args.gn" ]]; then
+    echo ">>> args.gn を生成中: $args_file"
+  fi
 
   cat > "$args_file" << 'ARGS_EOF'
 # mobile-bex: Android Chromium with Extensions
@@ -138,18 +141,24 @@ run_build() {
     echo "ビルド設定が見つかりません。先にセットアップします..."
     setup_build
   else
-    # 既存 args.gn と指定フラグの食い違いを黙って無視しない
-    local cur_cpu cur_official want_official
-    cur_cpu=$(grep -oP 'target_cpu\s*=\s*"\K[^"]+' "$args_file" || true)
-    cur_official=$(grep -oP 'is_official_build\s*=\s*\K\w+' "$args_file" || true)
-    want_official=$($IS_RELEASE && echo true || echo false)
-    if [[ -n "$cur_cpu" && "$cur_cpu" != "$TARGET_CPU" ]] \
-       || [[ -n "$cur_official" && "$cur_official" != "$want_official" ]]; then
-      echo "ERROR: 既存の $OUT_DIR/args.gn (cpu=$cur_cpu, official=$cur_official) と"
-      echo "       指定フラグ (cpu=$TARGET_CPU, official=$want_official) が一致しません。"
-      echo "       設定を変える場合は先に ./scripts/build.sh --setup を同じフラグ付きで実行してください。"
+    # 既存 args.gn が build.sh の生成内容と一致するか検証する。
+    # (build.sh を更新しても --setup を実行し忘れると、設定が反映されないまま
+    #  ビルドが通ってしまい原因究明が極めて困難になる。実際に
+    #  dcheck_always_on=false の反映漏れでレンダラークラッシュを追う羽目になった)
+    local expected_args
+    expected_args="$(mktemp)"
+    generate_args "$expected_args" > /dev/null
+    if ! diff -q "$expected_args" "$args_file" > /dev/null 2>&1; then
+      echo "ERROR: $OUT_DIR/args.gn が build.sh の生成内容と一致しません。"
+      echo "       差分 (左: 期待値 / 右: 現在):"
+      diff "$expected_args" "$args_file" | sed 's/^/         /' || true
+      echo ""
+      echo "       次を実行して設定を反映してください（全体の再ビルドになります）:"
+      echo "         ./scripts/build.sh --setup"
+      rm -f "$expected_args"
       exit 1
     fi
+    rm -f "$expected_args"
   fi
 
   echo ""

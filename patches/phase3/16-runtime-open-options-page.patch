@@ -1,0 +1,39 @@
+# Patch 16: chrome.runtime.openOptionsPage() を desktop-android で実装
+# (options ページを新しいタブで開く)
+diff --git a/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc b/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+index e4ad4c2..b058e17 100644
+--- a/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
++++ b/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+@@ -60,6 +60,7 @@
+ #else
+ #include "chrome/browser/ui/android/tab_model/tab_model.h"
+ #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
++#include "extensions/common/manifest_handlers/options_page_info.h"
+ #endif
+ 
+ namespace {
+@@ -419,9 +420,21 @@ bool ChromeRuntimeAPIDelegate::OpenOptionsPage(
+   return extensions::ExtensionTabUtil::OpenOptionsPageFromAPI(extension,
+                                                               browser_context);
+ #else
+-  // TODO(crbug.com/383366125): Implement this when options page for extensions
+-  // becomes available for desktop android.
+-  NOTIMPLEMENTED_LOG_ONCE();
++  // desktop-android: Open the options page in a new tab via TabModel.
++  GURL options_url =
++      extensions::OptionsPageInfo::GetOptionsPage(extension);
++  if (!options_url.is_valid()) {
++    return false;
++  }
++
++  for (TabModel* tab_model : TabModelList::models()) {
++    if (tab_model->IsActiveModel()) {
++      tab_model->CreateNewTabForDevTools(options_url,
++                                         /* new_window= */ false);
++      return true;
++    }
++  }
++
+   return false;
+ #endif
+ }

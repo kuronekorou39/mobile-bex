@@ -1,50 +1,41 @@
-# Patch 11: sidePanel left-slide overlay
-# Makes sidePanel.open()/close() show a left-sliding Dialog via JNI
-
-diff --git a/chrome/browser/extensions/api/side_panel/BUILD.gn b/chrome/browser/extensions/api/side_panel/BUILD.gn
---- a/chrome/browser/extensions/api/side_panel/BUILD.gn
-+++ b/chrome/browser/extensions/api/side_panel/BUILD.gn
-@@ -24,6 +24,14 @@
-     "//chrome/browser/extensions",
-     "//chrome/common/extensions/api",
-   ]
-+
-+  if (is_android) {
-+    deps += [
-+      "//chrome/browser/ui/android/extensions:jni_headers",
-+      "//chrome/common/extensions",
-+      "//content/public/browser",
-+    ]
-+  }
- }
-
- if (!enable_extensions) {
-
+# Patch 11: chrome.sidePanel の右スライドオーバーレイ実装 (Java/res)
+# BUILD.gn には 09 の BottomSheet ソース登録も含む（ファイル所有を一意にするため）。
 diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/android/extensions/BUILD.gn
+index 607ade2..6855704 100644
 --- a/chrome/browser/ui/android/extensions/BUILD.gn
 +++ b/chrome/browser/ui/android/extensions/BUILD.gn
-@@ -34,9 +34,11 @@
+@@ -33,19 +33,30 @@ android_library("java") {
+   if (enable_extensions_core) {
      deps += [
        ":java_resources",
-       "//components/browser_ui/bottomsheet/android:java",
++      "//components/browser_ui/bottomsheet/android:java",
 +      "//base/version_info/android:version_constants_java",
-       "//components/embedder_support/android:content_view_java",
-       "//components/embedder_support/android:web_contents_delegate_java",
++      "//components/embedder_support/android:content_view_java",
++      "//components/embedder_support/android:web_contents_delegate_java",
        "//chrome/browser/flags:java",
 +      "//chrome/browser/android/content:java",
        "//components/browser_ui/modaldialog/android:java",
        "//components/browser_ui/settings/android:java",
        "//components/browser_ui/site_settings/android:java",
-@@ -53,6 +55,8 @@
+       "//content/public/android:content_full_java",
+       "//third_party/androidx:androidx_annotation_annotation_java",
+       "//third_party/jni_zero:jni_zero_java",
++      "//components/thin_webview:factory_java",
++      "//components/thin_webview:java",
+     ]
+     sources += [
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionAction.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionContextMenuBridge.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionsBridge.java",
-       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java",
-       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java",
++      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java",
++      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java",
 +      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java",
 +      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionDeveloperPrivateBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionInstallDialogBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUiBackendImpl.java",
-@@ -80,6 +84,7 @@
+@@ -73,6 +84,7 @@ if (enable_extensions_core) {
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionContextMenuBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionsBridge.java",
@@ -52,7 +43,7 @@ diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/a
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionDeveloperPrivateBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionInstallDialogBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUtilBridge.java",
-@@ -175,6 +180,9 @@
+@@ -168,6 +180,9 @@ if (enable_extensions_core) {
      deps = [
        ":java",
        ":java_resources",
@@ -62,7 +53,7 @@ diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/a
        ":test_support_java",
        "//base:base_java",
        "//base:base_java_test_support",
-@@ -215,6 +223,10 @@
+@@ -208,6 +223,10 @@ android_resources("java_resources") {
      "java/res/layout/extensions_menu_item.xml",
      "java/res/values/dimens.xml",
      "java/res/values/integers.xml",
@@ -73,109 +64,55 @@ diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/a
    ]
  
    deps = [
-
-diff --git a/chrome/browser/ui/extensions/extension_action_view_model.cc b/chrome/browser/ui/extensions/extension_action_view_model.cc
---- a/chrome/browser/ui/extensions/extension_action_view_model.cc
-+++ b/chrome/browser/ui/extensions/extension_action_view_model.cc
-@@ -48,6 +48,8 @@
- #include "ui/gfx/native_ui_types.h"
- #include "ui/native_theme/native_theme.h"
-
-+#include "chrome/common/extensions/api/side_panel/side_panel_info.h"
-+
- #if BUILDFLAG(ENABLE_EXTENSIONS)
- #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
- #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
-@@ -336,7 +338,13 @@
-       side_panel_service->HasSidePanelActionForTab(*extension_, tab_id)) {
-     return true;
-   }
--#endif  // BUILDFLAG(ENABLE_EXTENSIONS)}
-+#else   // BUILDFLAG(ENABLE_EXTENSIONS)
-+  // On desktop-android, SidePanelService is not available.
-+  // Use manifest data to check if the extension has a side panel.
-+  if (extensions::SidePanelInfo::HasSidePanel(extension_.get())) {
-+    return true;
-+  }
-+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
-   return false;
- }
-
-@@ -647,7 +655,8 @@
-       side_panel_service &&
-       side_panel_service->HasSidePanelActionForTab(*extension_, tab_id);
- #else   // BUILDFLAG(ENABLE_EXTENSIONS)
--  bool has_side_panel_action = false;
-+  bool has_side_panel_action =
-+      extensions::SidePanelInfo::HasSidePanel(extension_.get());
- #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
-   bool is_grayscale =
-       GetSiteInteraction(web_contents) ==
-
-diff --git a/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc b/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
---- a/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
-+++ b/chrome/browser/extensions/api/side_panel/side_panel_api_stub.cc
-@@ -3,13 +3,20 @@
- // found in the LICENSE file.
- 
- // Stub implementation of the sidePanel API for desktop-android.
--// All functions are no-op or return sensible defaults.
--// The real implementation (side_panel_api.cc) depends on SidePanelService
--// which requires desktop browser_ui and is not available on Android.
-+// Most functions are no-op or return sensible defaults.
-+// open() and close() call through JNI to show/hide a left-slide overlay.
- 
- #include "chrome/browser/extensions/api/side_panel/side_panel_api.h"
- 
- #include "chrome/common/extensions/api/side_panel.h"
-+#include "chrome/common/extensions/api/side_panel/side_panel_info.h"
-+#include "extensions/common/extension.h"
-+
-+#if BUILDFLAG(IS_ANDROID)
-+#include "base/android/jni_string.h"
-+#include "content/public/browser/web_contents.h"
-+#include "chrome/browser/ui/android/extensions/jni_headers/ExtensionSidePanelBridge_jni.h"
-+#endif
- 
- namespace extensions {
- 
-@@ -50,8 +57,18 @@
-   return RespondNow(WithArguments(behavior.ToValue()));
- }
- 
--// open -> no-op (could open as tab in the future)
-+// open -> show left-slide overlay via JNI
- ExtensionFunction::ResponseAction SidePanelOpenFunction::RunFunction() {
-+#if BUILDFLAG(IS_ANDROID)
-+  const Extension* ext = extension();
-+  content::WebContents* sender = GetSenderWebContents();
-+  if (ext && sender && SidePanelInfo::HasSidePanel(ext)) {
-+    std::string path = SidePanelInfo::GetDefaultPath(ext);
-+    GURL url = ext->GetResourceURL(path);
-+    Java_ExtensionSidePanelBridge_showSidePanel(
-+        base::android::AttachCurrentThread(), url.spec(), sender);
-+  }
-+#endif
-   return RespondNow(NoArguments());
- }
- 
-@@ -61,8 +78,12 @@
-   return RespondNow(WithArguments(layout.ToValue()));
- }
- 
--// close -> no-op
-+// close -> hide overlay via JNI
- ExtensionFunction::ResponseAction SidePanelCloseFunction::RunFunction() {
-+#if BUILDFLAG(IS_ANDROID)
-+  Java_ExtensionSidePanelBridge_closeSidePanel(
-+      base::android::AttachCurrentThread());
-+#endif
-   return RespondNow(NoArguments());
- }
- 
-
+diff --git a/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_enter.xml b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_enter.xml
+new file mode 100644
+index 0000000..c08df32
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_enter.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright 2025 The Chromium Authors
++     Use of this source code is governed by a BSD-style license that can be
++     found in the LICENSE file. -->
++<translate xmlns:android="http://schemas.android.com/apk/res/android"
++    android:fromXDelta="100%"
++    android:toXDelta="0%"
++    android:duration="300"
++    android:interpolator="@android:anim/decelerate_interpolator" />
+diff --git a/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_exit.xml b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_exit.xml
+new file mode 100644
+index 0000000..9850c8f
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_exit.xml
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright 2025 The Chromium Authors
++     Use of this source code is governed by a BSD-style license that can be
++     found in the LICENSE file. -->
++<translate xmlns:android="http://schemas.android.com/apk/res/android"
++    android:fromXDelta="0%"
++    android:toXDelta="100%"
++    android:duration="250"
++    android:interpolator="@android:anim/accelerate_interpolator" />
+diff --git a/chrome/browser/ui/android/extensions/java/res/values/styles.xml b/chrome/browser/ui/android/extensions/java/res/values/styles.xml
+new file mode 100644
+index 0000000..1b52209
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/res/values/styles.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright 2025 The Chromium Authors
++     Use of this source code is governed by a BSD-style license that can be
++     found in the LICENSE file. -->
++<resources>
++    <style name="ExtensionSidePanelAnimation">
++        <item name="android:windowEnterAnimation">@anim/extension_side_panel_enter</item>
++        <item name="android:windowExitAnimation">@anim/extension_side_panel_exit</item>
++    </style>
++</resources>
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java
 new file mode 100644
+index 0000000..d2f0a26
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java
 @@ -0,0 +1,73 @@
@@ -252,9 +189,9 @@ new file mode 100644
 +        }
 +    }
 +}
-
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java
 new file mode 100644
+index 0000000..d784be4
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java
 @@ -0,0 +1,149 @@
@@ -407,50 +344,41 @@ new file mode 100644
 +        mDialog = null;
 +    }
 +}
-
-diff --git a/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_enter.xml b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_enter.xml
-new file mode 100644
---- /dev/null
-+++ b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_enter.xml
-@@ -0,0 +1,9 @@
-+<?xml version="1.0" encoding="utf-8"?>
-+<!-- Copyright 2025 The Chromium Authors
-+     Use of this source code is governed by a BSD-style license that can be
-+     found in the LICENSE file. -->
-+<translate xmlns:android="http://schemas.android.com/apk/res/android"
-+    android:fromXDelta="100%"
-+    android:toXDelta="0%"
-+    android:duration="300"
-+    android:interpolator="@android:anim/decelerate_interpolator" />
-
-diff --git a/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_exit.xml b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_exit.xml
-new file mode 100644
---- /dev/null
-+++ b/chrome/browser/ui/android/extensions/java/res/anim/extension_side_panel_exit.xml
-@@ -0,0 +1,9 @@
-+<?xml version="1.0" encoding="utf-8"?>
-+<!-- Copyright 2025 The Chromium Authors
-+     Use of this source code is governed by a BSD-style license that can be
-+     found in the LICENSE file. -->
-+<translate xmlns:android="http://schemas.android.com/apk/res/android"
-+    android:fromXDelta="0%"
-+    android:toXDelta="100%"
-+    android:duration="250"
-+    android:interpolator="@android:anim/accelerate_interpolator" />
-
-diff --git a/chrome/browser/ui/android/extensions/java/res/values/styles.xml b/chrome/browser/ui/android/extensions/java/res/values/styles.xml
-new file mode 100644
---- /dev/null
-+++ b/chrome/browser/ui/android/extensions/java/res/values/styles.xml
-@@ -0,0 +1,10 @@
-+<?xml version="1.0" encoding="utf-8"?>
-+<!-- Copyright 2025 The Chromium Authors
-+     Use of this source code is governed by a BSD-style license that can be
-+     found in the LICENSE file. -->
-+<resources>
-+    <style name="ExtensionSidePanelAnimation">
-+        <item name="android:windowEnterAnimation">@anim/extension_side_panel_enter</item>
-+        <item name="android:windowExitAnimation">@anim/extension_side_panel_exit</item>
-+    </style>
-+</resources>
-
+diff --git a/chrome/browser/ui/extensions/extension_action_view_model.cc b/chrome/browser/ui/extensions/extension_action_view_model.cc
+index f42c725..33cf1a1 100644
+--- a/chrome/browser/ui/extensions/extension_action_view_model.cc
++++ b/chrome/browser/ui/extensions/extension_action_view_model.cc
+@@ -48,6 +48,8 @@
+ #include "ui/gfx/native_ui_types.h"
+ #include "ui/native_theme/native_theme.h"
+ 
++#include "chrome/common/extensions/api/side_panel/side_panel_info.h"
++
+ #if BUILDFLAG(ENABLE_EXTENSIONS)
+ #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
+ #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
+@@ -336,7 +338,13 @@ bool ExtensionActionViewModel::IsEnabled(
+       side_panel_service->HasSidePanelActionForTab(*extension_, tab_id)) {
+     return true;
+   }
+-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)}
++#else   // BUILDFLAG(ENABLE_EXTENSIONS)
++  // On desktop-android, SidePanelService is not available.
++  // Use manifest data to check if the extension has a side panel.
++  if (extensions::SidePanelInfo::HasSidePanel(extension_.get())) {
++    return true;
++  }
++#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+   return false;
+ }
+ 
+@@ -647,7 +655,8 @@ ExtensionActionViewModel::GetIconImageSource(content::WebContents* web_contents,
+       side_panel_service &&
+       side_panel_service->HasSidePanelActionForTab(*extension_, tab_id);
+ #else   // BUILDFLAG(ENABLE_EXTENSIONS)
+-  bool has_side_panel_action = false;
++  bool has_side_panel_action =
++      extensions::SidePanelInfo::HasSidePanel(extension_.get());
+ #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+   bool is_grayscale =
+       GetSiteInteraction(web_contents) ==

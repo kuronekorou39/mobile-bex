@@ -1,0 +1,24 @@
+# Patch 18 (WIP): DevTools 拡張の buildflag を ENABLE_EXTENSIONS_CORE 化
+# 注意: devtools_page 持ち拡張の起動ハングは未解決。この変更だけでは不十分。
+diff --git a/chrome/browser/devtools/devtools_ui_bindings.cc b/chrome/browser/devtools/devtools_ui_bindings.cc
+index 138921e..eb6952c 100644
+--- a/chrome/browser/devtools/devtools_ui_bindings.cc
++++ b/chrome/browser/devtools/devtools_ui_bindings.cc
+@@ -136,7 +136,7 @@
+ #include "chrome/browser/user_education/user_education_service_factory.h"
+ #endif
+ 
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
++#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+ #include "chrome/browser/extensions/extension_management.h"
+ #include "extensions/browser/extension_registry.h"
+ #include "extensions/browser/extension_system.h"
+@@ -2667,7 +2667,7 @@ void DevToolsUIBindings::OnPermissionDialogResult(
+ }
+ 
+ void DevToolsUIBindings::AddDevToolsExtensionsToClient() {
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
++#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   const extensions::ExtensionRegistry* registry =
+       extensions::ExtensionRegistry::Get(profile_->GetOriginalProfile());
+   if (!registry) {

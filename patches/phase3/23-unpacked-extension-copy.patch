@@ -1,0 +1,191 @@
+# Patch 23: 未パッケージ拡張機能を読み込む前にプロファイル配下へコピーする
+# SAF パスのまま読み込むと _locales を持つ拡張機能で NOTREACHED クラッシュし、
+# 再起動後の再読み込みも SAF 権限喪失で失敗するため。
+diff --git a/chrome/browser/extensions/api/developer_private/developer_private_functions.cc b/chrome/browser/extensions/api/developer_private/developer_private_functions.cc
+index b98a656..2bbcb53 100644
+--- a/chrome/browser/extensions/api/developer_private/developer_private_functions.cc
++++ b/chrome/browser/extensions/api/developer_private/developer_private_functions.cc
+@@ -15,7 +15,9 @@
+ 
+ #include "base/barrier_closure.h"
+ #include "base/debug/crash_logging.h"
++#include "base/files/file_enumerator.h"
+ #include "base/files/file_util.h"
++#include "base/hash/hash.h"
+ #include "base/memory/ref_counted.h"
+ #include "base/metrics/histogram_functions.h"
+ #include "base/strings/strcat.h"
+@@ -361,6 +363,85 @@ bool MatchesExtension(ui::FileInfo& file_info,
+              : file_info.display_name.MatchesExtension(extension);
+ }
+ 
++#if BUILDFLAG(IS_ANDROID)
++
++// 拡張機能のコピー先 (プロファイル直下)。
++constexpr base::FilePath::CharType kUnpackedExtensionsDir[] =
++    FILE_PATH_LITERAL("Unpacked Extensions");
++
++// 拡張機能ディレクトリのネスト上限。SAF の表示名を辿るため、壊れた/悪意ある
++// 階層で無限再帰しないよう保険をかける。
++constexpr int kMaxCopyDepth = 16;
++
++// SAF (content URI) のディレクトリツリーをローカルファイルシステムへ再帰的に
++// コピーする。base::CopyDirectory は MakeAbsoluteFilePath や AppendRelativePath
++// に依存しており content URI では機能しないため、独自に実装している。
++bool CopySafDirectory(const base::FilePath& from_dir,
++                      const base::FilePath& to_dir,
++                      int depth) {
++  if (depth > kMaxCopyDepth) {
++    LOG(ERROR) << "Unpacked extension directory nested too deeply";
++    return false;
++  }
++  if (!base::CreateDirectory(to_dir)) {
++    return false;
++  }
++
++  base::FileEnumerator files(
++      from_dir, /*recursive=*/false,
++      base::FileEnumerator::FILES | base::FileEnumerator::DIRECTORIES);
++  for (base::FilePath child = files.Next(); !child.empty();
++       child = files.Next()) {
++    base::FileEnumerator::FileInfo info = files.GetInfo();
++    // SAF では Next() が content URI を返すため、名前は必ず GetInfo() から取る
++    // (content URI の BaseName() はエンコード済みドキュメントIDになる)。
++    const base::FilePath name = info.GetName();
++    // 表示名はプロバイダ由来の任意文字列。ディレクトリ脱出を防ぐ。
++    if (name.empty() || name.IsAbsolute() || name.ReferencesParent() ||
++        name.value().find(base::FilePath::kSeparators[0]) !=
++            base::FilePath::StringType::npos) {
++      LOG(ERROR) << "Skipping entry with unsafe name in unpacked extension";
++      continue;
++    }
++
++    const base::FilePath dest = to_dir.Append(name);
++    if (info.IsDirectory()) {
++      if (!CopySafDirectory(child, dest, depth + 1)) {
++        return false;
++      }
++    } else {
++      std::string contents;
++      if (!base::ReadFileToString(child, &contents) ||
++          !base::WriteFile(dest, contents)) {
++        LOG(ERROR) << "Failed to copy " << name;
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
++// `source_path` (SAF) をプロファイル配下にコピーし、コピー先を返す。失敗時は
++// 空パス。ブロッキング I/O のためワーカースレッドで実行すること。
++base::FilePath CopyUnpackedExtensionToProfile(const base::FilePath& source_path,
++                                              const base::FilePath& dest_root) {
++  // 同じフォルダを読み込み直したときに同じ場所へ上書きされるよう、コピー先名は
++  // 元パスから決定的に導出する。
++  const std::string dir_name = base::StringPrintf(
++      "%08x", base::PersistentHash(source_path.value()));
++  const base::FilePath dest = dest_root.AppendASCII(dir_name);
++
++  // 前回の内容が残っていると削除されたファイルが復活するため、作り直す。
++  base::DeletePathRecursively(dest);
++  if (!CopySafDirectory(source_path, dest, /*depth=*/0)) {
++    base::DeletePathRecursively(dest);
++    return base::FilePath();
++  }
++  return dest;
++}
++
++#endif  // BUILDFLAG(IS_ANDROID)
++
+ }  // namespace
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+@@ -948,6 +1029,36 @@ void DeveloperPrivateLoadUnpackedFunction::StartFileLoad(
+     return;
+   }
+   file_path = *vp;
++
++  // SAF パスのまま読み込むと拡張機能側の各所が破綻する: FileEnumerator が
++  // content URI を返すため親子パスの整合が崩れ、_locales を持つ拡張機能では
++  // extension_l10n_util の NOTREACHED に到達してブラウザごと落ちる。加えて
++  // SAF の権限は再起動で失われうるため、次回起動時の再読み込みも失敗する。
++  // プロファイル配下にコピーしてから通常のパスとして読み込む。
++  const base::FilePath dest_root =
++      browser_context()->GetPath().Append(kUnpackedExtensionsDir);
++  base::ThreadPool::PostTaskAndReplyWithResult(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++      base::BindOnce(&CopyUnpackedExtensionToProfile, file_path, dest_root),
++      base::BindOnce(
++          &DeveloperPrivateLoadUnpackedFunction::OnUnpackedDirectoryCopied,
++          this, file_path));
++}
++
++void DeveloperPrivateLoadUnpackedFunction::OnUnpackedDirectoryCopied(
++    const base::FilePath& source_path,
++    const base::FilePath& local_path) {
++  if (local_path.empty()) {
++    OnLoadComplete(nullptr, source_path,
++                   u"Failed to copy the extension directory");
++    return;
++  }
++  // コピー中にプロファイルが破棄された場合。
++  if (!browser_context()) {
++    OnLoadComplete(nullptr, source_path, u"Browser context is gone");
++    return;
++  }
++  const base::FilePath file_path = local_path;
+ #endif  // BUILDFLAG(IS_ANDROID)
+   scoped_refptr<UnpackedInstaller> installer(
+       UnpackedInstaller::Create(browser_context()));
+@@ -956,8 +1067,12 @@ void DeveloperPrivateLoadUnpackedFunction::StartFileLoad(
+       &DeveloperPrivateLoadUnpackedFunction::OnLoadComplete, this));
+   installer->Load(file_path);
+ 
+-  retry_guid_ = DeveloperPrivateAPI::Get(browser_context())
+-                    ->AddUnpackedPath(GetSenderWebContents(), file_path);
++  // Android ではコピー完了後に呼ばれるため、その間にタブが閉じていることがある
++  // (AddUnpackedPath は WebContents 非 null を前提としている)。
++  if (content::WebContents* web_contents = GetSenderWebContents()) {
++    retry_guid_ = DeveloperPrivateAPI::Get(browser_context())
++                      ->AddUnpackedPath(web_contents, file_path);
++  }
+ }
+ 
+ void DeveloperPrivateLoadUnpackedFunction::OnLoadComplete(
+diff --git a/chrome/browser/extensions/api/developer_private/developer_private_functions.h b/chrome/browser/extensions/api/developer_private/developer_private_functions.h
+index 75caa77..bf1f80c 100644
+--- a/chrome/browser/extensions/api/developer_private/developer_private_functions.h
++++ b/chrome/browser/extensions/api/developer_private/developer_private_functions.h
+@@ -331,6 +331,13 @@ class DeveloperPrivateLoadUnpackedFunction
+   // Starts loading the given `file_path`.
+   void StartFileLoad(const base::FilePath file_path);
+ 
++#if BUILDFLAG(IS_ANDROID)
++  // Called on the UI thread after the picked SAF directory has been copied into
++  // the profile. `local_path` is empty if the copy failed.
++  void OnUnpackedDirectoryCopied(const base::FilePath& source_path,
++                                 const base::FilePath& local_path);
++#endif
++
+   // Called when `file_path` load is completed
+   void OnLoadComplete(const Extension* extension,
+                       const base::FilePath& file_path,
+diff --git a/extensions/common/extension_l10n_util.cc b/extensions/common/extension_l10n_util.cc
+index 66234b9..7d7b4d3 100644
+--- a/extensions/common/extension_l10n_util.cc
++++ b/extensions/common/extension_l10n_util.cc
+@@ -566,7 +566,12 @@ bool ShouldSkipValidation(const base::FilePath& locales_path,
+   // '.svn' directories.
+   base::FilePath relative_path;
+   if (!locales_path.AppendRelativePath(locale_path, &relative_path)) {
+-    NOTREACHED();
++    // Android の SAF (content URI) では FileEnumerator が親パスの構文上の子孫
++    // ではないパスを返すため、ここに到達しうる。ブラウザごとクラッシュさせず
++    // 該当ロケールを検証対象から外す。
++    // (通常はロード前にローカルへコピーするためこの経路は通らない。)
++    LOG(ERROR) << "Locale path is not under _locales: " << locale_path;
++    return true;
+   }
+   std::string subdir = relative_path.MaybeAsASCII();
+   if (subdir.empty())

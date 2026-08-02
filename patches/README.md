@@ -46,6 +46,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 20 | `20-app-name.patch` | アプリ表示名を BEX に変更 |
 | 21 | `21-signin-add-account-no-crash.patch` | 「アカウントを追加」のクラッシュ防止（null返却） |
 | 22 | `22-selectfiledialog-tree-uri.patch` | Android 15+ でフォルダ選択が常に失敗する問題を修正 |
+| 23 | `23-unpacked-extension-copy.patch` | 未パッケージ拡張機能をプロファイル配下にコピーしてから読み込む |
 
 ### 欠番について
 

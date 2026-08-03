@@ -48,6 +48,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 22 | `22-selectfiledialog-tree-uri.patch` | Android 15+ でフォルダ選択が常に失敗する問題を修正 |
 | 23 | `23-unpacked-extension-copy.patch` | 未パッケージ拡張機能をプロファイル配下にコピーしてから読み込む |
 | 24 | `24-load-unpacked-progress.patch` | 読み込み中の進捗プレースホルダ（点線枠＋スピナー）を表示 |
+| 25 | `25-popup-width-transparency.patch` | ポップアップの幅の扱いを改善（全幅化 / 見切れ防止） |
 
 ### 欠番について
 

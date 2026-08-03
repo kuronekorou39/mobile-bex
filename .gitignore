@@ -1,6 +1,11 @@
 .claude/
 *.apk
 
+# 署名鍵は絶対にコミットしない
+*.keystore
+*.jks
+*.p12
+
 # Local debug artifacts (Preferences backups, screenshots, transient zips)
 Preferences*.json
 bex-screen*.png

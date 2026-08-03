@@ -1,6 +1,8 @@
+import os
 import subprocess
 ADB = r'C:\Android\platform-tools\adb.exe'
-SERIAL = '54231JEBF06373'
+# 端末シリアル。BEX_DEVICE_SERIAL で上書きできる (adb devices で確認)。
+SERIAL = os.environ.get('BEX_DEVICE_SERIAL', '54231JEBF06373')
 
 try:
     r = subprocess.run([ADB, '-s', SERIAL, 'logcat', '-c'], capture_output=True, timeout=15)

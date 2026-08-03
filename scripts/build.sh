@@ -60,15 +60,30 @@ ARGS_EOF
 
   echo "target_cpu = \"$TARGET_CPU\"" >> "$args_file"
 
+  cat >> "$args_file" << 'ARGS_EOF'
+
+# アプリのパッケージ名。本家 Chromium (org.chromium.chrome) のままだと
+# 併存できず、配布物としても誤解を招くため固有の名前にする。
+chrome_public_manifest_package = "com.rou39.bex"
+ARGS_EOF
+
   if $IS_RELEASE; then
     cat >> "$args_file" << 'ARGS_EOF'
 
-# Release build
+# 配布用ビルド
+# 注: is_official_build = true は本プロジェクトで未検証のため使用しない
+# (PGO プロファイル等の追加要件がある)。開発ビルドと同じ構成のまま、
+# 配布に不適切な設定だけを落とす。
 is_debug = false
 symbol_level = 0
 is_component_build = false
-is_official_build = true
+is_official_build = false
 is_chrome_branded = false
+
+# 配布物を android:debuggable="true" にしない。true のままだと第三者が
+# デバッガを接続したり run-as でアプリ内データを読めてしまう。
+# (開発ビルドでは復旧スクリプトが run-as を使うため true のまま)
+debuggable_apks = false
 ARGS_EOF
   else
     cat >> "$args_file" << 'ARGS_EOF'
@@ -80,6 +95,10 @@ is_component_build = false
 is_official_build = false
 is_chrome_branded = false
 is_java_debug = true
+ARGS_EOF
+  fi
+
+  cat >> "$args_file" << 'ARGS_EOF'
 
 # 非officialビルドはデフォルトで DCHECK / Java assert が有効になり、
 # 上流の実験的コード (desktop-android) の assert を踏むたびにクラッシュする
@@ -88,6 +107,25 @@ is_java_debug = true
 dcheck_always_on = false
 enable_java_asserts = false
 ARGS_EOF
+
+  # 配布用の署名鍵。鍵とパスワードはリポジトリに置かず環境変数で渡す。
+  # 未設定ならデバッグ鍵で署名される (配布不可)。
+  if $IS_RELEASE && [[ -n "${BEX_KEYSTORE_PATH:-}" ]]; then
+    if [[ ! -f "$BEX_KEYSTORE_PATH" ]]; then
+      echo "ERROR: BEX_KEYSTORE_PATH が指すファイルがありません: $BEX_KEYSTORE_PATH" >&2
+      exit 1
+    fi
+    if [[ -z "${BEX_KEYSTORE_NAME:-}" || -z "${BEX_KEYSTORE_PASSWORD:-}" ]]; then
+      echo "ERROR: BEX_KEYSTORE_NAME と BEX_KEYSTORE_PASSWORD も設定してください" >&2
+      exit 1
+    fi
+    {
+      echo ''
+      echo '# 配布用署名鍵 (BEX_KEYSTORE_* 環境変数から生成)'
+      echo "android_keystore_path = \"$BEX_KEYSTORE_PATH\""
+      echo "android_keystore_name = \"$BEX_KEYSTORE_NAME\""
+      echo "android_keystore_password = \"$BEX_KEYSTORE_PASSWORD\""
+    } >> "$args_file"
   fi
 
   # ccache

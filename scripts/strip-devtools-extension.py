@@ -10,7 +10,8 @@ import os
 import time
 
 ADB = r'C:\Android\platform-tools\adb.exe'
-SERIAL = '54231JEBF06373'
+# 端末シリアル。BEX_DEVICE_SERIAL で上書きできる (adb devices で確認)。
+SERIAL = os.environ.get('BEX_DEVICE_SERIAL', '54231JEBF06373')
 PKG = 'org.chromium.chrome'
 REMOTE_PATH = f'/data/data/{PKG}/app_chrome/Default/Preferences'
 # タイムスタンプ付きにして上書き破壊を防ぐ

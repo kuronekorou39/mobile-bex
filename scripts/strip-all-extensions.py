@@ -3,12 +3,14 @@
 without trying to load any extensions. Use this when the browser hangs at
 splash screen because of one or more extensions."""
 import json
+import os
 import subprocess
 import sys
 import time
 
 ADB = r'C:\Android\platform-tools\adb.exe'
-SERIAL = '54231JEBF06373'
+# 端末シリアル。BEX_DEVICE_SERIAL で上書きできる (adb devices で確認)。
+SERIAL = os.environ.get('BEX_DEVICE_SERIAL', '54231JEBF06373')
 PKG = 'org.chromium.chrome'
 REMOTE_PATH = f'/data/data/{PKG}/app_chrome/Default/Preferences'
 # タイムスタンプ付きにして上書き破壊を防ぐ（2回実行すると拡張ゼロの状態で
@@ -62,7 +64,6 @@ print()
 print("Step 3: Write fixed JSON locally...")
 with open(LOCAL_FIXED, 'w', encoding='utf-8', newline='\n') as f:
     json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
-import os
 print(f"  Wrote: {LOCAL_FIXED} ({os.path.getsize(LOCAL_FIXED)} bytes)")
 
 print()

@@ -19,16 +19,17 @@ BACKUP_FULL = r'C:\projects\mobile-bex\Preferences.allext.backup.json'
 LOCAL_FIXED = r'C:\projects\mobile-bex\Preferences.bisect.json'
 DEVICE_TMP = '/data/local/tmp/Preferences.bisect.json'
 
+# Preferences 内の拡張機能パスに含まれるディレクトリ名 (test-extensions/<名前>)
 ORDER = [
-    'test-extension',
-    'test-extension-fulltab',
-    'test-extension-notifications',
-    'test-extension-phase2',
-    'test-extension-options',
-    'test-extension-newtab',
-    'test-extension-contextmenu',
-    'test-extension-sidepanel',
-    'test-extension-omnibox',
+    'basic',
+    'fulltab',
+    'notifications',
+    'phase2',
+    'options',
+    'newtab',
+    'contextmenu',
+    'sidepanel',
+    'omnibox',
 ]
 
 BOOT_MARKER = 'cr_TopSites: Finished saving'
@@ -90,7 +91,7 @@ print(f"Backup contains {len(backup_settings)} extension entries")
 
 # Map each extension name to a (ext_id, entry) tuple from the backup.
 # Match against the last path segment; check longer names first so that
-# 'test-extension-fulltab' wins over 'test-extension' (prefix match).
+# 'fulltab' wins over 'basic' (前方一致による誤マッチを避けるため長い順に判定).
 def matches_name(segment, name):
     """True if the path segment refers to exactly this extension name.
     Allow base name, ' (n)' / '-n' suffix variants from Android renames."""

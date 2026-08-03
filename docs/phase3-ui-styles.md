@@ -7,16 +7,16 @@
 
 | # | 拡張 / スタイル | テスト拡張ディレクトリ | 結果 | 関連修正 |
 |---|---|---|---|---|
-| 1 | Content Script | `test-extension` | ✅ PASS | Phase 1 (パッチなし) |
-| 2 | Popup + API | `test-extension-phase2` | ✅ PASS | Phase 2 + Patch 1〜4,9 |
-| 3 | Side Panel | `test-extension-sidepanel` | ✅ PASS (初回FAIL→リトライPASS) | Patch 7,8,11,12 |
-| 4 | Full Tab Page | `test-extension-fulltab` | ✅ PASS | Phase 2 |
-| 5 | Options Page | `test-extension-options` | ✅ PASS | **Phase 3b: chrome_runtime_api_delegate.cc** |
-| 6 | Notifications | `test-extension-notifications` | ✅ PASS | (OS権限懸念は杞憂) |
-| 7 | Context Menus | `test-extension-contextmenu` | ⚠️ 部分PASS | page/link/image OK、selection NG |
-| 8 | New Tab Override | `test-extension-newtab` | ✅ PASS | **Phase 3b: chrome_feature_list.cc** |
-| 9 | DevTools Panel | `test-extension-devtools` | ❌ **FAIL (起動阻害)** | **Phase 3b: devtools_ui_bindings.cc 修正不完全** |
-| 10 | Omnibox | `test-extension-omnibox` | ✅ PASS (要リビルド検証) | Patch 14 + サジェスト非表示の1行修正 |
+| 1 | Content Script | `test-extensions/basic` | ✅ PASS | Phase 1 (パッチなし) |
+| 2 | Popup + API | `test-extensions/phase2` | ✅ PASS | Phase 2 + Patch 1〜4,9 |
+| 3 | Side Panel | `test-extensions/sidepanel` | ✅ PASS (初回FAIL→リトライPASS) | Patch 7,8,11,12 |
+| 4 | Full Tab Page | `test-extensions/fulltab` | ✅ PASS | Phase 2 |
+| 5 | Options Page | `test-extensions/options` | ✅ PASS | **Phase 3b: chrome_runtime_api_delegate.cc** |
+| 6 | Notifications | `test-extensions/notifications` | ✅ PASS | (OS権限懸念は杞憂) |
+| 7 | Context Menus | `test-extensions/contextmenu` | ⚠️ 部分PASS | page/link/image OK、selection NG |
+| 8 | New Tab Override | `test-extensions/newtab` | ✅ PASS | **Phase 3b: chrome_feature_list.cc** |
+| 9 | DevTools Panel | `test-extensions/devtools` | ❌ **FAIL (起動阻害)** | **Phase 3b: devtools_ui_bindings.cc 修正不完全** |
+| 10 | Omnibox | `test-extensions/omnibox` | ✅ PASS (要リビルド検証) | Patch 14 + サジェスト非表示の1行修正 |
 
 ### 追加で動作確認できた項目
 
@@ -104,7 +104,7 @@
 
 ## 既知の派生課題
 
-### test-extension-options のCSP問題（修正済み）
+### test-extensions/options のCSP問題（修正済み）
 - 当初 popup.html にインラインスクリプトがあり Manifest V3 の CSP違反
 - popup.js への分離で解決済み（コミット済み）
 
@@ -125,13 +125,13 @@
 
 | ディレクトリ | スタイル | 確認方法 |
 |---|---|---|
-| `test-extension` | Content Script | ページ読み込みで青いバナー注入確認 |
-| `test-extension-phase2` | Popup + API | アイコンタップ → ポップアップ → APIテストボタン |
-| `test-extension-sidepanel` | Side Panel | Popup → Open Side Panel |
-| `test-extension-fulltab` | Full Tab Page | アイコンタップ → 新タブで page.html |
-| `test-extension-options` | Options Page | Popup → Open Options Page → 新タブで options.html |
-| `test-extension-newtab` | New Tab Override | タブバーの「+」で新規タブ → カスタムページ |
-| `test-extension-devtools` | DevTools Panel | **読み込み禁止 (Chromium起動阻害)** |
-| `test-extension-omnibox` | Omnibox | アドレスバーに `bex <URL>` 入力 → サジェストをタップ |
-| `test-extension-contextmenu` | Context Menu | ページ/リンク/画像長押し (selection 不可) |
-| `test-extension-notifications` | Notifications | Popup → 通知ボタン |
+| `test-extensions/basic` | Content Script | ページ読み込みで青いバナー注入確認 |
+| `test-extensions/phase2` | Popup + API | アイコンタップ → ポップアップ → APIテストボタン |
+| `test-extensions/sidepanel` | Side Panel | Popup → Open Side Panel |
+| `test-extensions/fulltab` | Full Tab Page | アイコンタップ → 新タブで page.html |
+| `test-extensions/options` | Options Page | Popup → Open Options Page → 新タブで options.html |
+| `test-extensions/newtab` | New Tab Override | タブバーの「+」で新規タブ → カスタムページ |
+| `test-extensions/devtools` | DevTools Panel | **読み込み禁止 (Chromium起動阻害)** |
+| `test-extensions/omnibox` | Omnibox | アドレスバーに `bex <URL>` 入力 → サジェストをタップ |
+| `test-extensions/contextmenu` | Context Menu | ページ/リンク/画像長押し (selection 不可) |
+| `test-extensions/notifications` | Notifications | Popup → 通知ボタン |

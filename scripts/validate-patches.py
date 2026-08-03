@@ -5,7 +5,7 @@ CI およびローカルでの事前チェック用。Chromium ソース不要�
 1. patches/**/*.patch の hunk ヘッダ (@@ -a,b +c,d @@) と本文の行数整合
    (過去に 09/10/13/14 で手編集による corrupt patch が発生したため)
 2. .sh / .patch / .py が LF であること (CRLF だと WSL / git apply で全滅)
-3. test-extension*/manifest.json が有効な JSON かつ Manifest V3 であること
+3. test-extensions/*/manifest.json が有効な JSON かつ Manifest V3 であること
 
 使い方: python3 scripts/validate-patches.py  (リポジトリルートで実行)
 終了コード: 問題なし=0, 問題あり=1
@@ -113,7 +113,7 @@ def main():
         validate_line_endings(p)
     print(f"scripts: {len(scripts)} checked (line endings)")
 
-    manifests = glob.glob(os.path.join(REPO, "test-extension*", "manifest.json"))
+    manifests = glob.glob(os.path.join(REPO, "test-extensions", "*", "manifest.json"))
     for p in manifests:
         validate_manifest(p)
     print(f"manifests: {len(manifests)} checked")

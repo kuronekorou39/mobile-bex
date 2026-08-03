@@ -5,8 +5,8 @@
 経緯は `patches/README.md` 参照）。
 
 - 対象端末: Pixel 9a (Android 16) / SHV48 (Android 10)
-- テスト拡張機能: デスクトップの `test-extension-*.zip`（`zip-extensions.ps1` で再生成）
-- **`test-extension-devtools` は読み込まない**（起動ハング既知問題。復旧は
+- テスト拡張機能: デスクトップの `bex-test-*.zip`（`zip-extensions.ps1` で再生成）
+- **`test-extensions/devtools` は読み込まない**（起動ハング既知問題。復旧は
   `scripts/strip-devtools-extension.py`）
 
 ## 1. 基本起動

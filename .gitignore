@@ -6,8 +6,8 @@
 *.jks
 *.p12
 
-# Local debug artifacts (Preferences backups, screenshots, transient zips)
+# ローカルのデバッグ生成物 (Preferences のバックアップ、スクショ、一時 zip)
 Preferences*.json
 bex-screen*.png
-test-extension*.zip
-test-extensions-all-*.zip
+bex-test-*.zip
+__pycache__/

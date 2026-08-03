@@ -34,7 +34,7 @@
 
 ## テスト拡張機能
 
-- `test-extension/` (Manifest V3, Content Script)
+- `test-extensions/basic/` (Manifest V3, Content Script)
 - 全URLに対してページ上部に青いバナーを注入
 - Content Script + CSSの注入が正常に動作することを確認
 

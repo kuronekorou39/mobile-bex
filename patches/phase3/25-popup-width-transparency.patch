@@ -3,10 +3,10 @@
 # 上流の最大幅 800dip がスマホ画面より広く見切れる問題も修正する。
 # (シート側の透過・サイズ追従は Patch 09 に含まれる)
 diff --git a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
-index 5b7959f..c1ad05f 100644
+index 5b7959f..1d8f894 100644
 --- a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
 +++ b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
-@@ -12,9 +12,12 @@
+@@ -12,6 +12,8 @@
  #include "chrome/browser/ui/browser_window/internal/android/android_browser_window.h"
  #include "content/public/browser/render_widget_host_view.h"
  #include "content/public/browser/web_contents.h"
@@ -15,11 +15,7 @@ index 5b7959f..c1ad05f 100644
  #include "extensions/browser/extension_action.h"
  #include "extensions/browser/extension_action_manager.h"
  #include "extensions/browser/extension_registry.h"
-+#include "third_party/skia/include/core/SkColor.h"
- 
- // Must come after all headers that specialize FromJniType() / ToJniType().
- #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionActionPopupContents_jni.h"
-@@ -34,6 +37,17 @@ namespace {
+@@ -34,6 +36,17 @@ namespace {
  constexpr gfx::Size kMinSize = {25, 25};
  constexpr gfx::Size kMaxSize = {800, 600};
  
@@ -37,23 +33,12 @@ index 5b7959f..c1ad05f 100644
  }  // namespace
  
  ExtensionActionPopupContents::ExtensionActionPopupContents(
-@@ -121,7 +135,49 @@ void ExtensionActionPopupContents::LoadInitialPage(JNIEnv* env) {
+@@ -121,7 +134,51 @@ void ExtensionActionPopupContents::LoadInitialPage(JNIEnv* env) {
  
  void ExtensionActionPopupContents::SetUpNewMainFrame(
      RenderFrameHost* render_frame_host) {
 -  render_frame_host->GetView()->EnableAutoResize(kMinSize, kMaxSize);
 +  ApplyAutoResizeBounds(render_frame_host);
-+
-+  // ポップアップは自動リサイズで内容の高さに合わせてレイアウトされるが、
-+  // 描画領域 (BottomSheet の高さ) はそれより高いため、余った下側がページの
-+  // 既定背景色 (白) で塗られてしまう。ビューのサイズを変えると ThinWebView の
-+  // 描画が止まるため (Patch 09 のコメント参照)、ここでは背景を透過にして
-+  // 余白から背後のページが見えるようにする。
-+  // 注: ポップアップ自身が背景色を指定していない場合、ポップアップ本体も
-+  // 透けることになる。実用上の拡張機能はほぼ body に背景色を持つ。
-+  if (render_frame_host->GetView()) {
-+    render_frame_host->GetView()->SetBackgroundColor(SK_ColorTRANSPARENT);
-+  }
 +}
 +
 +void ExtensionActionPopupContents::ApplyAutoResizeBounds(
@@ -61,27 +46,40 @@ index 5b7959f..c1ad05f 100644
 +  if (!render_frame_host || !render_frame_host->GetView()) {
 +    return;
 +  }
++
++  if (!sheet_size_.IsEmpty()) {
++    // シート全体を埋めるサイズで固定する。自動サイズのままだと、内容が
++    // 短いポップアップの下に BottomSheet 自身の背景 (ライトテーマでは純白)
++    // が露出してしまう。ポップアップ自身の背景で埋めさせることで、
++    // ダーク/ライトどちらのポップアップでも見た目が一貫する。
++    // (描画領域そのものを縮める方法は ThinWebView のリサイズが必要で、
++    //  それを行うとポップアップが描画されなくなる。Patch 09 のコメント参照)
++    render_frame_host->GetView()->EnableAutoResize(sheet_size_, sheet_size_);
++    return;
++  }
++
 +  gfx::Size min_size = kMinSize;
 +  gfx::Size max_size = kMaxSize;
 +  const int available_width = GetAvailableWidthDip();
 +  if (available_width > 0) {
 +    // シートより広く描かせない (はみ出すと見切れる)。
 +    max_size.set_width(available_width);
-+    if (full_width_) {
-+      // レイアウトが可変なポップアップは幅いっぱいに広げる。最小幅を
-+      // シート幅にすることで、レンダラーがその幅でレイアウトする。
-+      min_size.set_width(available_width);
-+    }
 +  }
 +  min_size.SetToMin(max_size);
 +  render_frame_host->GetView()->EnableAutoResize(min_size, max_size);
 +}
 +
-+void ExtensionActionPopupContents::SetFullWidth(JNIEnv* env) {
-+  if (full_width_) {
++void ExtensionActionPopupContents::SetSheetSize(JNIEnv* env,
++                                                int width_dip,
++                                                int height_dip) {
++  if (width_dip <= 0 || height_dip <= 0) {
 +    return;
 +  }
-+  full_width_ = true;
++  const gfx::Size new_size(width_dip, height_dip);
++  if (sheet_size_ == new_size) {
++    return;
++  }
++  sheet_size_ = new_size;
 +  if (host_) {
 +    ApplyAutoResizeBounds(host_->main_frame_host());
 +  }
@@ -89,17 +87,25 @@ index 5b7959f..c1ad05f 100644
  
  void ExtensionActionPopupContents::HandleCloseExtensionHost(
 diff --git a/chrome/browser/ui/android/extensions/extension_action_popup_contents.h b/chrome/browser/ui/android/extensions/extension_action_popup_contents.h
-index 303b15f..cfae39b 100644
+index 303b15f..0ba11d3 100644
 --- a/chrome/browser/ui/android/extensions/extension_action_popup_contents.h
 +++ b/chrome/browser/ui/android/extensions/extension_action_popup_contents.h
-@@ -65,12 +65,21 @@ class ExtensionActionPopupContents : public content::WebContentsObserver,
+@@ -10,6 +10,7 @@
+ #include "base/android/jni_android.h"
+ #include "chrome/browser/extensions/extension_view.h"
+ #include "content/public/browser/web_contents_observer.h"
++#include "ui/gfx/geometry/size.h"
+ 
+ namespace content {
+ class RenderFrameHost;
+@@ -65,12 +66,21 @@ class ExtensionActionPopupContents : public content::WebContentsObserver,
    // hosted WebContents.
    void LoadInitialPage(JNIEnv* env);
  
-+  // Called from Java when the popup should lay out at the full width of the
-+  // bottom sheet instead of its natural (content) width. Used for popups whose
-+  // layout is fluid; see ExtensionBottomSheetCoordinator.
-+  void SetFullWidth(JNIEnv* env);
++  // Called from Java with the size of the bottom sheet in DIP. The popup is
++  // then laid out at exactly that size so that it fills the sheet; see
++  // ExtensionBottomSheetCoordinator.
++  void SetSheetSize(JNIEnv* env, int width_dip, int height_dip);
 +
   private:
    void SetUpNewMainFrame(content::RenderFrameHost* render_frame_host);
@@ -109,41 +115,45 @@ index 303b15f..cfae39b 100644
  
    std::unique_ptr<ExtensionViewHost> host_;
    base::android::ScopedJavaGlobalRef<jobject> java_object_;
-+  // Whether the popup is forced to lay out at the available (sheet) width.
-+  bool full_width_ = false;
++  // Size of the bottom sheet in DIP, or empty if not known yet.
++  gfx::Size sheet_size_;
  };
  
  }  // namespace extensions
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java
-index 8f0ff85..f0e40b6 100644
+index 8f0ff85..7ea772f 100644
 --- a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java
-@@ -83,6 +83,15 @@ public class ExtensionActionPopupContents implements Destroyable {
+@@ -83,6 +83,16 @@ public class ExtensionActionPopupContents implements Destroyable {
          ExtensionActionPopupContentsJni.get().loadInitialPage(mNativeExtensionActionPopupContents);
      }
  
 +    /**
-+     * Makes the popup lay out at the full width of the bottom sheet instead of its natural
-+     * (content) width. Used for popups whose layout is fluid.
++     * Tells the popup the size of the bottom sheet (in DIP) so that it lays out filling the sheet
++     * instead of using its natural content size.
 +     */
-+    public void setFullWidth() {
++    public void setSheetSize(int widthDip, int heightDip) {
 +        if (mNativeExtensionActionPopupContents == 0) return;
-+        ExtensionActionPopupContentsJni.get().setFullWidth(mNativeExtensionActionPopupContents);
++        ExtensionActionPopupContentsJni.get()
++                .setSheetSize(mNativeExtensionActionPopupContents, widthDip, heightDip);
 +    }
 +
      /**
       * Sets the delegate to receive UI-related callbacks for this popup.
       *
-@@ -155,5 +164,12 @@ public class ExtensionActionPopupContents implements Destroyable {
+@@ -155,5 +165,15 @@ public class ExtensionActionPopupContents implements Destroyable {
           * @param nativeExtensionActionPopupContents The pointer to the native object.
           */
          void loadInitialPage(long nativeExtensionActionPopupContents);
 +
 +        /**
-+         * Makes the popup lay out at the full available width instead of its content width.
++         * Sets the size of the bottom sheet so the popup lays out filling it.
 +         *
 +         * @param nativeExtensionActionPopupContents The pointer to the native object.
++         * @param widthDip Sheet width in DIP.
++         * @param heightDip Sheet height in DIP.
 +         */
-+        void setFullWidth(long nativeExtensionActionPopupContents);
++        void setSheetSize(
++                long nativeExtensionActionPopupContents, int widthDip, int heightDip);
      }
  }

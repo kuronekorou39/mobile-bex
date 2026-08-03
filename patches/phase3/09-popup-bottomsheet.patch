@@ -150,10 +150,10 @@ index 0000000..b1055e5
 +}
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
 new file mode 100644
-index 0000000..e0fea60
+index 0000000..e24f7eb
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,218 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -163,6 +163,7 @@ index 0000000..e0fea60
 +import android.app.Activity;
 +import android.graphics.Color;
 +import android.content.Context;
++import android.view.View;
 +
 +import org.chromium.base.version_info.VersionInfo;
 +import org.chromium.build.annotations.NullMarked;
@@ -197,7 +198,6 @@ index 0000000..e0fea60
 +    private @Nullable ExtensionActionPopupContents mContents;
 +    private @Nullable BottomSheetObserver mSheetObserver;
 +    private boolean mIsHiding;
-+    private boolean mRequestedFullWidth;
 +
 +    /**
 +     * Shows the extension popup in a BottomSheet.
@@ -215,7 +215,6 @@ index 0000000..e0fea60
 +        // コーディネータが再利用された場合に前回の hide でセットされたままの
 +        // フラグを戻す (true のままだと以後 hide() が無効になる)。
 +        mIsHiding = false;
-+        mRequestedFullWidth = false;
 +
 +        mBottomSheetController = BottomSheetControllerProvider.from(windowAndroid);
 +        if (mBottomSheetController == null) return false;
@@ -254,7 +253,8 @@ index 0000000..e0fea60
 +                new ExtensionActionPopupContents.Delegate() {
 +                    @Override
 +                    public void resizeDueToAutoResize(int width, int height) {
-+                        onContentResized(width, height);
++                        // ポップアップはシートを埋めるサイズに固定しているため、
++                        // 追従すべきサイズ変更はない。
 +                    }
 +
 +                    @Override
@@ -288,7 +288,15 @@ index 0000000..e0fea60
 +                };
 +        mBottomSheetController.addObserver(mSheetObserver);
 +
++        // シートのサイズが決まり次第 (および回転などで変わるたびに) ポップアップに
++        // 伝える。ThinWebView のビューサイズは MATCH_PARENT のまま変更しない。
++        mSheetContent
++                .getContentView()
++                .addOnLayoutChangeListener(
++                        (v, l, t, r, b, ol, ot, or, ob) -> applySheetSizeToPopup());
++
 +        mSheetContent.getContentView().post(() -> {
++            applySheetSizeToPopup();
 +            if (mContents != null) {
 +                mContents.loadInitialPage();
 +            }
@@ -317,34 +325,25 @@ index 0000000..e0fea60
 +    }
 +
 +    /**
-+     * 報告された内容幅がシート幅のこの割合以上なら「レイアウトが可変」とみなし、
-+     * 幅いっぱいに広げる。自動リサイズはポップアップの「内容が必要とする幅」しか
-+     * 教えてくれず、それ以上に広げてよいかは判別できないための経験則。
++     * ポップアップをシート全体を埋めるサイズでレイアウトさせる。
++     *
++     * <p>自動サイズのままだと、内容が短いポップアップの下や右に BottomSheet 自身の
++     * 背景 (ライトテーマでは純白) が露出する。描画領域そのものを内容に合わせて
++     * 縮める方法は ThinWebView のリサイズが必要で、それを行うとポップアップが
++     * 一切描画されなくなるため使えない。ポップアップ自身の背景で埋めさせることで、
++     * ダーク/ライトどちらのポップアップでも見た目が一貫する。
 +     */
-+    private static final float FLUID_WIDTH_THRESHOLD = 0.6f;
-+
-+    private void onContentResized(int widthDp, int heightDp) {
++    private void applySheetSizeToPopup() {
 +        if (mSheetContent == null || mContents == null) return;
 +
-+        final float density = mSheetContent.getContentView().getResources()
-+                .getDisplayMetrics().density;
-+        final int widthPx = Math.round(widthDp * density);
-+        final int sheetWidthPx = mSheetContent.getContentView().getWidth();
++        final View contentView = mSheetContent.getContentView();
++        final int widthPx = contentView.getWidth();
++        final int heightPx = contentView.getHeight();
++        if (widthPx <= 0 || heightPx <= 0) return;
 +
-+        if (sheetWidthPx > 0
-+                && !mRequestedFullWidth
-+                && widthPx >= sheetWidthPx * FLUID_WIDTH_THRESHOLD) {
-+            // 可変レイアウトとみなして幅いっぱいで再レイアウトさせる。
-+            // 一度だけ要求する (再入するとレイアウトが振動するため)。
-+            mRequestedFullWidth = true;
-+            mContents.setFullWidth();
-+        }
-+
-+        // 注: ここで ThinWebView のビューサイズを内容に合わせて変更すると、
-+        // ポップアップが一切描画されなくなる (シートは出るが中身が真っ黒/灰色)。
-+        // ThinWebView のサーフェス再生成が未実装 (CompositorViewImpl.recreateSurface
-+        // が空実装) であることが原因と思われる。シート下部の余白解消は別途
-+        // 検討する。
++        final float density = contentView.getResources().getDisplayMetrics().density;
++        mContents.setSheetSize(
++                Math.round(widthPx / density), Math.round(heightPx / density));
 +    }
 +
 +    private void cleanup() {

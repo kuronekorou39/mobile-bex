@@ -1,0 +1,93 @@
+# Patch 26: Chrome ウェブストアを既定でデスクトップ表示にする
+# モバイル表示ではストアが「パソコンからアクセスして」としか返さず、
+# 拡張機能を導入できないため。初回のみ設定し、以後はユーザーの選択を尊重する。
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
+index 41b556c..4806572 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
+@@ -1350,6 +1350,10 @@ public class RootUiCoordinator
+ 
+         DesktopSiteUtils.maybeDefaultEnableWindowSetting(mActivity, originalProfile);
+ 
++        // mobile-bex: ウェブストアはモバイル表示だと拡張機能を導入できないため、
++        // 初回のみデスクトップ表示を既定にする。
++        DesktopSiteUtils.maybeDefaultEnableWebStoreDesktopSite(originalProfile);
++
+         initMerchantTrustSignals(originalProfile);
+     }
+ 
+diff --git a/chrome/browser/android/preferences/browser_prefs_android.cc b/chrome/browser/android/preferences/browser_prefs_android.cc
+index 7ec131d..8d027b5 100644
+--- a/chrome/browser/android/preferences/browser_prefs_android.cc
++++ b/chrome/browser/android/preferences/browser_prefs_android.cc
+@@ -24,6 +24,7 @@ void RegisterPrefs(PrefRegistrySimple* registry) {
+ void RegisterUserProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+   NotificationPlatformBridgeAndroid::RegisterProfilePrefs(registry);
+   registry->RegisterBooleanPref(prefs::kDesktopSiteWindowSettingEnabled, false);
++  registry->RegisterBooleanPref(prefs::kBexWebStoreDesktopSiteSeeded, false);
+ }
+ 
+ }  // namespace android
+diff --git a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
+index 13dd08d..b54783f 100644
+--- a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
++++ b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
+@@ -56,6 +56,39 @@ public class DesktopSiteUtils {
+     static final int DEFAULT_GLOBAL_SETTING_DEFAULT_ON_SMALLEST_SCREEN_WIDTH_THRESHOLD_DP = 600;
+     static final int DEFAULT_GLOBAL_SETTING_DEFAULT_ON_MEMORY_LIMIT_THRESHOLD_MB = 6500;
+ 
++    /**
++     * mobile-bex: Chrome ウェブストアのドメイン。モバイルの User-Agent では
++     * 「パソコンからアクセスしてください」というページしか返さないため、
++     * 拡張機能を導入できない。
++     */
++    private static final String[] WEB_STORE_URLS = {
++        "https://chromewebstore.google.com/", "https://chrome.google.com/webstore/",
++    };
++
++    /**
++     * mobile-bex: 初回起動時に一度だけ、Chrome ウェブストアをデスクトップ表示に
++     * 設定する。
++     *
++     * <p>ウェブストアはモバイル表示だと利用できず、拡張機能を動かすことが目的の
++     * このブラウザでは機能欠落に等しいため、既定でデスクトップ表示にする。
++     * ただし押しつけにならないよう、設定を入れるのは一度だけとし、ユーザーが
++     * 後からモバイル表示に戻した場合はその選択を尊重する。
++     *
++     * @param profile 対象プロファイル。
++     */
++    public static void maybeDefaultEnableWebStoreDesktopSite(Profile profile) {
++        if (profile == null || profile.isOffTheRecord()) return;
++
++        PrefService prefService = UserPrefs.get(profile);
++        if (prefService.getBoolean(PrefNames.BEX_WEB_STORE_DESKTOP_SITE_SEEDED)) return;
++        prefService.setBoolean(PrefNames.BEX_WEB_STORE_DESKTOP_SITE_SEEDED, true);
++
++        for (String url : WEB_STORE_URLS) {
++            setRequestDesktopSiteContentSettingsForUrl(
++                    profile, new GURL(url), /* useDesktopUserAgent= */ true);
++        }
++    }
++
+     /**
+      * Set or remove a domain level exception with URL for {@link
+      * ContentSettingsType.REQUEST_DESKTOP_SITE}. Clear the subdomain level exception if any.
+diff --git a/components/content_settings/core/common/pref_names.h b/components/content_settings/core/common/pref_names.h
+index 6f03edb..a1228d2 100644
+--- a/components/content_settings/core/common/pref_names.h
++++ b/components/content_settings/core/common/pref_names.h
+@@ -279,6 +279,14 @@ inline constexpr char kRequestDesktopSiteGlobalSettingUserEnabled[] =
+ // mobile site if the window is narrow.
+ inline constexpr char kDesktopSiteWindowSettingEnabled[] =
+     "desktop_site.window_setting";
++
++// mobile-bex: Whether the one-time desktop-site exception for the Chrome Web
++// Store has been seeded. The store serves a "please use a desktop computer"
++// page to mobile user agents, which would make extensions uninstallable on a
++// browser whose whole purpose is running them. Seeded once so that a user who
++// later switches the store back to mobile is not overridden on every startup.
++inline constexpr char kBexWebStoreDesktopSiteSeeded[] =
++    "bex.web_store_desktop_site_seeded";
+ #endif
+ 
+ }  // namespace prefs

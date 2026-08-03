@@ -1,0 +1,449 @@
+# Patch 10: BottomSheet ポップアップの Robolectric テスト
+# あわせて、Phase 3 のパッチがコンストラクタを変更したことで壊れていた
+# 既存テストを修正する (テストターゲットを一度もビルドしていなかったため
+# 気づいていなかった)。junit ターゲットへの登録は Patch 11 に含まれる。
+diff --git a/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java
+new file mode 100644
+index 0000000..b901b2c
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java
+@@ -0,0 +1,130 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertNull;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.view.View;
++import android.widget.FrameLayout;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.MockitoAnnotations;
++import org.robolectric.RuntimeEnvironment;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.chrome.browser.ui.extensions.R;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
++import org.chromium.components.thinwebview.ThinWebView;
++
++/** Tests for {@link ExtensionBottomSheetContent}. */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ExtensionBottomSheetContentTest {
++    @Mock private ThinWebView mThinWebView;
++    @Mock private View mMockView;
++
++    private boolean mCallbackCalled;
++    private ExtensionBottomSheetContent mContent;
++
++    @Before
++    public void setUp() {
++        MockitoAnnotations.initMocks(this);
++        when(mThinWebView.getView()).thenReturn(mMockView);
++        mCallbackCalled = false;
++        mContent =
++                new ExtensionBottomSheetContent(
++                        RuntimeEnvironment.application,
++                        mThinWebView,
++                        () -> mCallbackCalled = true);
++    }
++
++    @Test
++    public void testGetContentView_returnsFrameLayout() {
++        View contentView = mContent.getContentView();
++        assertNotNull(contentView);
++        assertTrue(contentView instanceof FrameLayout);
++    }
++
++    @Test
++    public void testGetContentView_containsThinWebView() {
++        FrameLayout contentView = (FrameLayout) mContent.getContentView();
++        assertEquals(1, contentView.getChildCount());
++        assertEquals(mMockView, contentView.getChildAt(0));
++    }
++
++    @Test
++    public void testGetToolbarView_returnsNull() {
++        assertNull(mContent.getToolbarView());
++    }
++
++    @Test
++    public void testGetVerticalScrollOffset_returnsZero() {
++        assertEquals(0, mContent.getVerticalScrollOffset());
++    }
++
++    @Test
++    public void testGetFullHeightRatio() {
++        assertEquals(0.7f, mContent.getFullHeightRatio(), 0.001f);
++    }
++
++    @Test
++    public void testGetHalfHeightRatio() {
++        assertEquals(0.5f, mContent.getHalfHeightRatio(), 0.001f);
++    }
++
++    @Test
++    public void testGetPriority_returnsHigh() {
++        assertEquals(BottomSheetContent.ContentPriority.HIGH, mContent.getPriority());
++    }
++
++    @Test
++    public void testSwipeToDismissEnabled_returnsTrue() {
++        assertTrue(mContent.swipeToDismissEnabled());
++    }
++
++    @Test
++    public void testHasCustomLifecycle_returnsTrue() {
++        assertTrue(mContent.hasCustomLifecycle());
++    }
++
++    @Test
++    public void testHandleBackPress_invokesCallback() {
++        assertTrue(mContent.handleBackPress());
++        assertTrue(mCallbackCalled);
++    }
++
++    @Test
++    public void testDestroy_destroysThinWebView() {
++        mContent.destroy();
++        verify(mThinWebView).destroy();
++    }
++
++    @Test
++    public void testGetSheetContentDescription() {
++        assertEquals(
++                "Extension popup",
++                mContent.getSheetContentDescription(RuntimeEnvironment.application));
++    }
++
++    @Test
++    public void testAccessibilityStringIds_returnValidResources() {
++        assertEquals(
++                R.string.extension_popup_sheet_opened_half,
++                mContent.getSheetHalfHeightAccessibilityStringId());
++        assertEquals(
++                R.string.extension_popup_sheet_opened_full,
++                mContent.getSheetFullHeightAccessibilityStringId());
++        assertEquals(
++                R.string.extension_popup_sheet_closed,
++                mContent.getSheetClosedAccessibilityStringId());
++    }
++}
+diff --git a/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java
+new file mode 100644
+index 0000000..a48dacd
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java
+@@ -0,0 +1,217 @@
++// Copyright 2025 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.eq;
++import static org.mockito.Mockito.doReturn;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import android.app.Activity;
++import android.content.Context;
++import android.os.Looper;
++
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.ArgumentCaptor;
++import org.mockito.Mock;
++import org.mockito.MockitoAnnotations;
++import org.robolectric.Robolectric;
++import org.robolectric.Shadows;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetObserver;
++import org.chromium.components.thinwebview.ThinWebView;
++import org.chromium.content_public.browser.WebContents;
++import org.chromium.ui.base.WindowAndroid;
++
++import java.lang.ref.WeakReference;
++
++/** Tests for {@link ExtensionBottomSheetCoordinator}. */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ExtensionBottomSheetCoordinatorTest {
++    @Mock private WindowAndroid mWindowAndroid;
++    @Mock private BottomSheetController mBottomSheetController;
++    @Mock private ExtensionActionPopupContents mContents;
++    @Mock private WebContents mWebContents;
++    @Mock private ThinWebView mThinWebView;
++
++    private Activity mActivity;
++    private ExtensionBottomSheetCoordinator mCoordinator;
++
++    /**
++     * Chromium の Robolectric は静的モックに対応していないため、静的な取得を行う
++     * メソッドをサブクラスで差し替える。
++     */
++    private class TestCoordinator extends ExtensionBottomSheetCoordinator {
++        @Override
++        protected BottomSheetController getBottomSheetController(WindowAndroid windowAndroid) {
++            return mBottomSheetController;
++        }
++
++        @Override
++        protected ThinWebView createThinWebView(Context context, WindowAndroid windowAndroid) {
++            return mThinWebView;
++        }
++    }
++
++    @Before
++    public void setUp() {
++        MockitoAnnotations.initMocks(this);
++
++        // Activity はモックだと getResources() が null になり、View の生成や
++        // DisplayMetrics の参照で落ちるため、Robolectric の実インスタンスを使う。
++        mActivity = Robolectric.buildActivity(Activity.class).setup().get();
++
++        mCoordinator = new TestCoordinator();
++
++        // Mock WindowAndroid.getActivity() -> Activity.
++        WeakReference<Activity> activityRef = new WeakReference<>(mActivity);
++        doReturn(activityRef).when(mWindowAndroid).getActivity();
++
++        // Mock contents.
++        when(mContents.getWebContents()).thenReturn(mWebContents);
++
++        // Mock ThinWebView.getView() for FrameLayout.addView.
++        when(mThinWebView.getView())
++                .thenReturn(new android.view.View(mActivity));
++
++        // Default: requestShowContent succeeds.
++        when(mBottomSheetController.requestShowContent(any(), eq(true))).thenReturn(true);
++    }
++
++    @Test
++    public void testShowPopup_activityNull_returnsFalse() {
++        WeakReference<Activity> nullRef = new WeakReference<>(null);
++        doReturn(nullRef).when(mWindowAndroid).getActivity();
++
++        assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
++    }
++
++    @Test
++    public void testShowPopup_bottomSheetControllerNull_returnsFalse() {
++        ExtensionBottomSheetCoordinator coordinator =
++                new ExtensionBottomSheetCoordinator() {
++                    @Override
++                    protected BottomSheetController getBottomSheetController(
++                            WindowAndroid windowAndroid) {
++                        return null;
++                    }
++                };
++
++        assertFalse(coordinator.showPopup(mWindowAndroid, mContents));
++    }
++
++    @Test
++    public void testShowPopup_success_returnsTrue() {
++        assertTrue(mCoordinator.showPopup(mWindowAndroid, mContents));
++    }
++
++    @Test
++    public void testShowPopup_success_setsDelegate() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        verify(mContents).setDelegate(any(ExtensionActionPopupContents.Delegate.class));
++    }
++
++    @Test
++    public void testShowPopup_success_attachesWebContents() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        verify(mThinWebView).attachWebContents(eq(mWebContents), any(), any());
++    }
++
++    @Test
++    public void testShowPopup_success_loadsInitialPage() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++
++        // 初期ページの読み込みは View.post() 経由。View.post() はビューが
++        // ウィンドウに接続されるまで実行されないため、シートの表示を模して
++        // コンテンツビューを接続してから Looper を回す。
++        ArgumentCaptor<BottomSheetContent> captor =
++                ArgumentCaptor.forClass(BottomSheetContent.class);
++        verify(mBottomSheetController).requestShowContent(captor.capture(), eq(true));
++        mActivity.setContentView(captor.getValue().getContentView());
++        Shadows.shadowOf(Looper.getMainLooper()).idle();
++
++        verify(mContents).loadInitialPage();
++    }
++
++    @Test
++    public void testShowPopup_requestShowContentFails_returnsFalseAndCleanup() {
++        when(mBottomSheetController.requestShowContent(any(), eq(true))).thenReturn(false);
++
++        assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
++        Shadows.shadowOf(Looper.getMainLooper()).idle();
++        verify(mContents).destroy();
++        verify(mContents, never()).loadInitialPage();
++    }
++
++    @Test
++    public void testHide_hidesContentAndCleansUp() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        mCoordinator.hide();
++
++        verify(mBottomSheetController).hideContent(any(), eq(false));
++        verify(mContents).destroy();
++    }
++
++    @Test
++    public void testHide_withoutShow_doesNotCrash() {
++        // Should not throw.
++        mCoordinator.hide();
++    }
++
++    @Test
++    public void testHide_twice_destroysContentsOnce() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++        mCoordinator.hide();
++        mCoordinator.hide();
++
++        verify(mContents).destroy();
++    }
++
++    /**
++     * スワイプで閉じた場合など hide() を経由しない閉じ方でも WebContents が破棄される
++     * ことを確認する。検知していないと、見えないままポップアップの JS が動き続ける。
++     */
++    @Test
++    public void testSheetContentReplaced_cleansUp() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++
++        ArgumentCaptor<BottomSheetObserver> captor =
++                ArgumentCaptor.forClass(BottomSheetObserver.class);
++        verify(mBottomSheetController).addObserver(captor.capture());
++
++        // 別のコンテンツに差し替わった = 自分のシートは閉じられた。
++        captor.getValue().onSheetContentChanged(mock(BottomSheetContent.class));
++
++        verify(mContents).destroy();
++    }
++
++    @Test
++    public void testSheetContentUnchanged_doesNotCleanUp() {
++        mCoordinator.showPopup(mWindowAndroid, mContents);
++
++        ArgumentCaptor<BottomSheetContent> contentCaptor =
++                ArgumentCaptor.forClass(BottomSheetContent.class);
++        verify(mBottomSheetController).requestShowContent(contentCaptor.capture(), eq(true));
++
++        ArgumentCaptor<BottomSheetObserver> observerCaptor =
++                ArgumentCaptor.forClass(BottomSheetObserver.class);
++        verify(mBottomSheetController).addObserver(observerCaptor.capture());
++
++        // 自分のコンテンツが通知された場合は閉じられていないので破棄しない。
++        observerCaptor.getValue().onSheetContentChanged(contentCaptor.getValue());
++
++        verify(mContents, never()).destroy();
++    }
++}
+diff --git a/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionTestUtils.java b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionTestUtils.java
+index c5be7be..879ed47 100644
+--- a/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionTestUtils.java
++++ b/chrome/browser/ui/android/extensions/javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionTestUtils.java
+@@ -122,7 +122,8 @@ public class ExtensionTestUtils {
+                         /* text= */ extensionName,
+                         /* accessibleName= */ "",
+                         /* tooltipText= */ "",
+-                        /* isOn= */ false);
++                        /* isOn= */ false,
++                        /* icon= */ null);
+         return new ExtensionsMenuTypes.MenuEntryState(extensionId, actionButton);
+     }
+ 
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinatorTest.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinatorTest.java
+index 539ea80..2419a30 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinatorTest.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinatorTest.java
+@@ -43,6 +43,7 @@ import org.chromium.chrome.browser.ui.extensions.ExtensionTestUtils;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuBridge;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuBridgeJni;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuTypes;
++import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
+ import org.chromium.components.embedder_support.util.UrlConstants;
+ import org.chromium.content_public.browser.LoadUrlParams;
+ import org.chromium.ui.listmenu.ListMenuButton;
+@@ -66,6 +67,7 @@ public class ExtensionsMenuCoordinatorTest {
+     @Mock private Tab mTab;
+     @Mock private ThemeColorProvider mThemeColorProvider;
+     @Mock private ExtensionsMenuBridge.Natives mExtensionsMenuBridgeJniMock;
++    @Mock private ExtensionsToolbarBridge mExtensionsToolbarBridge;
+ 
+     @Captor private ArgumentCaptor<LoadUrlParams> mLoadUrlParamsCaptor;
+ 
+@@ -117,7 +119,8 @@ public class ExtensionsMenuCoordinatorTest {
+                         mTask,
+                         mProfile,
+                         mCurrentTabSupplier,
+-                        mTabCreator);
++                        mTabCreator,
++                        mExtensionsToolbarBridge);
+     }
+ 
+     @After
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediatorTest.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediatorTest.java
+index 766240f..57035b8 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediatorTest.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediatorTest.java
+@@ -58,6 +58,7 @@ import org.chromium.ui.modelutil.PropertyModel;
+ 
+ import java.util.ArrayList;
+ import java.util.List;
++import java.util.function.Consumer;
+ 
+ /** Tests for {@link ExtensionsMenuMediator}. */
+ @RunWith(BaseRobolectricTestRunner.class)
+@@ -81,6 +82,9 @@ public class ExtensionsMenuMediatorTest {
+     @Mock private WebContents mWebContents;
+     @Mock private ExtensionActionContextMenuBridge.Native mActionContextMenuBridgeJniMock;
+     @Mock private ExtensionsMenuBridge.Natives mExtensionsMenuBridgeJniMock;
++
++    @SuppressWarnings("unchecked")
++    private final Consumer<String> mOnActionClicked = mock(Consumer.class);
+     @Mock private MenuModelBridge mActionContextMenuModelBridge;
+     @Mock private PropertyModel mMenuPropertyModel;
+     @Mock private Runnable mOnReadyRunnable;
+@@ -130,7 +134,8 @@ public class ExtensionsMenuMediatorTest {
+                         mActionModels,
+                         mMenuPropertyModel,
+                         null,
+-                        mOnReadyRunnable);
++                        mOnReadyRunnable,
++                        mOnActionClicked);
+ 
+         // Capture the bridge instance created inside the constructor
+         verify(mExtensionsMenuBridgeJniMock).init(mBridgeCaptor.capture(), anyLong());
+@@ -197,7 +202,8 @@ public class ExtensionsMenuMediatorTest {
+                         mActionModels,
+                         mMenuPropertyModel,
+                         null,
+-                        mOnReadyRunnable);
++                        mOnReadyRunnable,
++                        mOnActionClicked);
+ 
+         // Verify it should have populated immediately without needing a callback.
+         assertEquals(1, mActionModels.size());

@@ -1,8 +1,11 @@
 # 実機スモークテスト手順書
 
 リビルド後に実機で確認する項目の一覧。全項目で「クラッシュしないこと」を暗黙の合格条件とする。
-自動テストが整備されるまでの代替として使う（旧 Patch 10 のテストは実在しなかったため削除済み。
-経緯は `patches/README.md` 参照）。
+
+自動テスト (Robolectric) は BottomSheet ポップアップ周りに 25 件あり、
+`autoninja -C out/MobileBex chrome_junit_tests` でビルドして
+`out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"` で実行できる。
+本書はそれでは確認できない実機の挙動を対象とする。
 
 - 対象端末: Pixel 9a (Android 16) / SHV48 (Android 10)
 - テスト拡張機能: デスクトップの `bex-test-*.zip`（`zip-extensions.ps1` で再生成）

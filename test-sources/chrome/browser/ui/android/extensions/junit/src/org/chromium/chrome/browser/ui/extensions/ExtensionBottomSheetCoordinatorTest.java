@@ -15,23 +15,24 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.app.Activity;
+import android.content.Context;
+import android.os.Looper;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.robolectric.Robolectric;
+import org.robolectric.Shadows;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
-import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
+import org.chromium.components.browser_ui.bottomsheet.BottomSheetObserver;
 import org.chromium.components.thinwebview.ThinWebView;
-import org.chromium.components.thinwebview.ThinWebViewFactory;
 import org.chromium.content_public.browser.WebContents;
-import org.chromium.ui.base.IntentRequestTracker;
 import org.chromium.ui.base.WindowAndroid;
 
 import java.lang.ref.WeakReference;
@@ -43,52 +44,50 @@ public class ExtensionBottomSheetCoordinatorTest {
     @Mock private BottomSheetController mBottomSheetController;
     @Mock private ExtensionActionPopupContents mContents;
     @Mock private WebContents mWebContents;
-    @Mock private Activity mActivity;
     @Mock private ThinWebView mThinWebView;
-    @Mock private IntentRequestTracker mIntentRequestTracker;
 
-    private MockedStatic<BottomSheetControllerProvider> mBottomSheetControllerProviderMock;
-    private MockedStatic<ThinWebViewFactory> mThinWebViewFactoryMock;
-
+    private Activity mActivity;
     private ExtensionBottomSheetCoordinator mCoordinator;
+
+    /**
+     * Chromium の Robolectric は静的モックに対応していないため、静的な取得を行う
+     * メソッドをサブクラスで差し替える。
+     */
+    private class TestCoordinator extends ExtensionBottomSheetCoordinator {
+        @Override
+        protected BottomSheetController getBottomSheetController(WindowAndroid windowAndroid) {
+            return mBottomSheetController;
+        }
+
+        @Override
+        protected ThinWebView createThinWebView(Context context, WindowAndroid windowAndroid) {
+            return mThinWebView;
+        }
+    }
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        mCoordinator = new ExtensionBottomSheetCoordinator();
+        // Activity はモックだと getResources() が null になり、View の生成や
+        // DisplayMetrics の参照で落ちるため、Robolectric の実インスタンスを使う。
+        mActivity = Robolectric.buildActivity(Activity.class).setup().get();
+
+        mCoordinator = new TestCoordinator();
 
         // Mock WindowAndroid.getActivity() -> Activity.
         WeakReference<Activity> activityRef = new WeakReference<>(mActivity);
         doReturn(activityRef).when(mWindowAndroid).getActivity();
-        when(mWindowAndroid.getIntentRequestTracker()).thenReturn(mIntentRequestTracker);
-
-        // Mock static providers.
-        mBottomSheetControllerProviderMock =
-                Mockito.mockStatic(BottomSheetControllerProvider.class);
-        mBottomSheetControllerProviderMock
-                .when(() -> BottomSheetControllerProvider.from(mWindowAndroid))
-                .thenReturn(mBottomSheetController);
-
-        mThinWebViewFactoryMock = Mockito.mockStatic(ThinWebViewFactory.class);
-        mThinWebViewFactoryMock
-                .when(() -> ThinWebViewFactory.create(any(), any(), any()))
-                .thenReturn(mThinWebView);
 
         // Mock contents.
         when(mContents.getWebContents()).thenReturn(mWebContents);
 
         // Mock ThinWebView.getView() for FrameLayout.addView.
-        when(mThinWebView.getView()).thenReturn(new android.view.View(mActivity));
+        when(mThinWebView.getView())
+                .thenReturn(new android.view.View(mActivity));
 
         // Default: requestShowContent succeeds.
         when(mBottomSheetController.requestShowContent(any(), eq(true))).thenReturn(true);
-    }
-
-    @After
-    public void tearDown() {
-        mBottomSheetControllerProviderMock.close();
-        mThinWebViewFactoryMock.close();
     }
 
     @Test
@@ -101,11 +100,16 @@ public class ExtensionBottomSheetCoordinatorTest {
 
     @Test
     public void testShowPopup_bottomSheetControllerNull_returnsFalse() {
-        mBottomSheetControllerProviderMock
-                .when(() -> BottomSheetControllerProvider.from(mWindowAndroid))
-                .thenReturn(null);
+        ExtensionBottomSheetCoordinator coordinator =
+                new ExtensionBottomSheetCoordinator() {
+                    @Override
+                    protected BottomSheetController getBottomSheetController(
+                            WindowAndroid windowAndroid) {
+                        return null;
+                    }
+                };
 
-        assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
+        assertFalse(coordinator.showPopup(mWindowAndroid, mContents));
     }
 
     @Test
@@ -128,6 +132,16 @@ public class ExtensionBottomSheetCoordinatorTest {
     @Test
     public void testShowPopup_success_loadsInitialPage() {
         mCoordinator.showPopup(mWindowAndroid, mContents);
+
+        // 初期ページの読み込みは View.post() 経由。View.post() はビューが
+        // ウィンドウに接続されるまで実行されないため、シートの表示を模して
+        // コンテンツビューを接続してから Looper を回す。
+        ArgumentCaptor<BottomSheetContent> captor =
+                ArgumentCaptor.forClass(BottomSheetContent.class);
+        verify(mBottomSheetController).requestShowContent(captor.capture(), eq(true));
+        mActivity.setContentView(captor.getValue().getContentView());
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
         verify(mContents).loadInitialPage();
     }
 
@@ -136,6 +150,7 @@ public class ExtensionBottomSheetCoordinatorTest {
         when(mBottomSheetController.requestShowContent(any(), eq(true))).thenReturn(false);
 
         assertFalse(mCoordinator.showPopup(mWindowAndroid, mContents));
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
         verify(mContents).destroy();
         verify(mContents, never()).loadInitialPage();
     }
@@ -145,7 +160,7 @@ public class ExtensionBottomSheetCoordinatorTest {
         mCoordinator.showPopup(mWindowAndroid, mContents);
         mCoordinator.hide();
 
-        verify(mBottomSheetController).hideContent(any(), eq(true));
+        verify(mBottomSheetController).hideContent(any(), eq(false));
         verify(mContents).destroy();
     }
 
@@ -153,5 +168,50 @@ public class ExtensionBottomSheetCoordinatorTest {
     public void testHide_withoutShow_doesNotCrash() {
         // Should not throw.
         mCoordinator.hide();
+    }
+
+    @Test
+    public void testHide_twice_destroysContentsOnce() {
+        mCoordinator.showPopup(mWindowAndroid, mContents);
+        mCoordinator.hide();
+        mCoordinator.hide();
+
+        verify(mContents).destroy();
+    }
+
+    /**
+     * スワイプで閉じた場合など hide() を経由しない閉じ方でも WebContents が破棄される
+     * ことを確認する。検知していないと、見えないままポップアップの JS が動き続ける。
+     */
+    @Test
+    public void testSheetContentReplaced_cleansUp() {
+        mCoordinator.showPopup(mWindowAndroid, mContents);
+
+        ArgumentCaptor<BottomSheetObserver> captor =
+                ArgumentCaptor.forClass(BottomSheetObserver.class);
+        verify(mBottomSheetController).addObserver(captor.capture());
+
+        // 別のコンテンツに差し替わった = 自分のシートは閉じられた。
+        captor.getValue().onSheetContentChanged(mock(BottomSheetContent.class));
+
+        verify(mContents).destroy();
+    }
+
+    @Test
+    public void testSheetContentUnchanged_doesNotCleanUp() {
+        mCoordinator.showPopup(mWindowAndroid, mContents);
+
+        ArgumentCaptor<BottomSheetContent> contentCaptor =
+                ArgumentCaptor.forClass(BottomSheetContent.class);
+        verify(mBottomSheetController).requestShowContent(contentCaptor.capture(), eq(true));
+
+        ArgumentCaptor<BottomSheetObserver> observerCaptor =
+                ArgumentCaptor.forClass(BottomSheetObserver.class);
+        verify(mBottomSheetController).addObserver(observerCaptor.capture());
+
+        // 自分のコンテンツが通知された場合は閉じられていないので破棄しない。
+        observerCaptor.getValue().onSheetContentChanged(contentCaptor.getValue());
+
+        verify(mContents, never()).destroy();
     }
 }

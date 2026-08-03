@@ -43,7 +43,7 @@ Chrome / Chromium とは別のアプリとして共存します。
 
 ## 仕組み
 
-Chromium 本体に 26 本のパッチを当てています。一覧は
+Chromium 本体に 27 本のパッチを当てています。一覧は
 [patches/README.md](patches/README.md)、実装の詳細と検証結果は
 [docs/](docs/) 以下にあります。
 

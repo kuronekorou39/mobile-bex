@@ -8,7 +8,7 @@ Chromium Android に拡張機能サポートを追加するためのパッチ群
 patches/
 ├── phase1/    # 空: PoC はパッチ不要だった（下記参照）
 ├── phase2/    # 空: API 検証もパッチ不要だった
-└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜15）
+└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜26）
 ```
 
 ## Phase 1 / Phase 2 について
@@ -21,9 +21,8 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 
 ## Phase 3 パッチ一覧 (UX最適化)
 
-2026-08-02 に全パッチを WSL 作業ツリーから再生成し、clean な Chromium 147
-(HEAD 8953804a86) へのフル適用で作業ツリーと完全一致することを検証済み。
-05/06/10 は欠番（下記注記参照）。
+全パッチは clean な Chromium 147 (HEAD 8953804a86) への番号順フル適用で
+作業ツリーと完全一致することを検証済み。05/06 は欠番（下記注記参照）。
 
 | # | ファイル名 | 内容 |
 |---|-----------|------|
@@ -34,6 +33,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 07 | `07-sidepanel-permission-allow.patch` | sidePanel パーミッション許可 |
 | 08 | `08-sidepanel-api-stub.patch` | chrome.sidePanel API スタブ |
 | 09 | `09-popup-bottomsheet.patch` | ポップアップの BottomSheet 表示（最終形態） |
+| 10 | `10-tests.patch` | BottomSheet ポップアップの Robolectric テスト（25件） |
 | 11 | `11-sidepanel-overlay.patch` | sidePanel の右スライドオーバーレイ実装 (Java/res/BUILD.gn) |
 | 12 | `12-sidepanel-open-service-worker-fix.patch` | sidePanel C++ 側修正（SWからの open() / onClicked 許可） |
 | 13 | `13-menu-extension-icons.patch` | 拡張機能メニュー行のアイコン表示 |
@@ -55,13 +55,25 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 
 - **05** (popup-max-width) / **06** (popup-open-as-tab): ポップアップ表示の中間形態。
   09 の BottomSheet 方式で完全に置き換えられたため削除。
-- **10** (tests): 参照していたテストファイルが実在しなかったため削除。
-  テストは今後実装し直す（Robolectric/GTest の実行環境確認から）。
+(10 は一度削除したが、2026-08-04 にテストを実際に動く状態にして復活させた。
+`chrome_junit_tests` で 25 件すべて PASS することを確認済み。)
 
 ### 注意
 
 - パッチは**シリーズとして番号順にフル適用**すること。中間状態は単体で
   ビルドが通るとは限らない（例: 09 が追加する Java は 11 の BUILD.gn 変更で登録される）。
+
+## テスト
+
+```bash
+# ビルド (初回は依存が多く時間がかかる)
+autoninja -C out/MobileBex chrome_junit_tests
+
+# 実行
+out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
+```
+
+実機での確認手順は `docs/smoke-test.md` を参照。
 
 ## 適用方法
 
@@ -72,7 +84,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 # Phase 3 パッチを適用（デフォルト。phase1/2 は空なのでスキップされる）
 ./scripts/apply-patches.sh
 
-# パッチを元に戻す（18→01 の逆順で剥がされる）
+# パッチを元に戻す（26→01 の逆順で剥がされる）
 ./scripts/apply-patches.sh --reverse
 ```
 

@@ -17,10 +17,10 @@ index 0000000..c55b43f
 +</resources>
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java
 new file mode 100644
-index 0000000..3d78b14
+index 0000000..b1055e5
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,127 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -39,7 +39,6 @@ index 0000000..3d78b14
 +import org.chromium.build.annotations.Nullable;
 +import org.chromium.chrome.browser.ui.extensions.R;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
-+import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent.HeightMode;
 +import org.chromium.components.thinwebview.ThinWebView;
 +
 +/**
@@ -74,18 +73,6 @@ index 0000000..3d78b14
 +        mContentView.addView(mThinWebView.getView(), params);
 +    }
 +
-+    /**
-+     * Sizes the popup view to the given pixel size. Pass {@link
-+     * FrameLayout.LayoutParams#MATCH_PARENT} for a dimension that should fill the sheet.
-+     */
-+    public void setPopupViewSize(int widthPx, int heightPx) {
-+        View view = mThinWebView.getView();
-+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
-+        if (params.width == widthPx && params.height == heightPx) return;
-+        params.width = widthPx;
-+        params.height = heightPx;
-+        view.setLayoutParams(params);
-+    }
 +
 +    @Override
 +    public View getContentView() {
@@ -119,15 +106,15 @@ index 0000000..3d78b14
 +
 +    @Override
 +    public float getFullHeightRatio() {
-+        // 内容の高さに追従させる。固定比率だと、ポップアップが短いときに
-+        // 下側がシートの背景色 (白) で埋まってしまうため。
-+        return HeightMode.WRAP_CONTENT;
++        // 注: HeightMode.WRAP_CONTENT にすると内容の高さに追従してシート下部の
++        // 余白は消えるが、それに伴う ThinWebView のリサイズでポップアップが
++        // 描画されなくなる問題があったため固定比率に戻している。
++        return FULL_HEIGHT_RATIO;
 +    }
 +
 +    @Override
 +    public float getHalfHeightRatio() {
-+        // WRAP_CONTENT と half 状態は併用できない。
-+        return HeightMode.DISABLED;
++        return HALF_HEIGHT_RATIO;
 +    }
 +
 +    @Override
@@ -163,10 +150,10 @@ index 0000000..3d78b14
 +}
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
 new file mode 100644
-index 0000000..d65efe3
+index 0000000..e0fea60
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,219 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -176,7 +163,6 @@ index 0000000..d65efe3
 +import android.app.Activity;
 +import android.graphics.Color;
 +import android.content.Context;
-+import android.widget.FrameLayout;
 +
 +import org.chromium.base.version_info.VersionInfo;
 +import org.chromium.build.annotations.NullMarked;
@@ -343,7 +329,6 @@ index 0000000..d65efe3
 +        final float density = mSheetContent.getContentView().getResources()
 +                .getDisplayMetrics().density;
 +        final int widthPx = Math.round(widthDp * density);
-+        final int heightPx = Math.round(heightDp * density);
 +        final int sheetWidthPx = mSheetContent.getContentView().getWidth();
 +
 +        if (sheetWidthPx > 0
@@ -353,19 +338,13 @@ index 0000000..d65efe3
 +            // 一度だけ要求する (再入するとレイアウトが振動するため)。
 +            mRequestedFullWidth = true;
 +            mContents.setFullWidth();
-+            // 幅は全幅、高さは内容に合わせる (シートは WRAP_CONTENT なので
-+            // ここで指定した高さがそのままシートの高さになる)。
-+            mSheetContent.setPopupViewSize(FrameLayout.LayoutParams.MATCH_PARENT, heightPx);
-+            return;
 +        }
 +
-+        if (mRequestedFullWidth) {
-+            mSheetContent.setPopupViewSize(FrameLayout.LayoutParams.MATCH_PARENT, heightPx);
-+            return;
-+        }
-+
-+        // 固定幅の小さいポップアップは実サイズを尊重し、周囲は透過のままにする。
-+        mSheetContent.setPopupViewSize(widthPx, heightPx);
++        // 注: ここで ThinWebView のビューサイズを内容に合わせて変更すると、
++        // ポップアップが一切描画されなくなる (シートは出るが中身が真っ黒/灰色)。
++        // ThinWebView のサーフェス再生成が未実装 (CompositorViewImpl.recreateSurface
++        // が空実装) であることが原因と思われる。シート下部の余白解消は別途
++        // 検討する。
 +    }
 +
 +    private void cleanup() {

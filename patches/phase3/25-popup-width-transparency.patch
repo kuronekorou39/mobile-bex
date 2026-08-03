@@ -3,10 +3,10 @@
 # 上流の最大幅 800dip がスマホ画面より広く見切れる問題も修正する。
 # (シート側の透過・サイズ追従は Patch 09 に含まれる)
 diff --git a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
-index 5b7959f..63a70a2 100644
+index 5b7959f..c1ad05f 100644
 --- a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
 +++ b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
-@@ -12,6 +12,8 @@
+@@ -12,9 +12,12 @@
  #include "chrome/browser/ui/browser_window/internal/android/android_browser_window.h"
  #include "content/public/browser/render_widget_host_view.h"
  #include "content/public/browser/web_contents.h"
@@ -15,7 +15,11 @@ index 5b7959f..63a70a2 100644
  #include "extensions/browser/extension_action.h"
  #include "extensions/browser/extension_action_manager.h"
  #include "extensions/browser/extension_registry.h"
-@@ -34,6 +36,17 @@ namespace {
++#include "third_party/skia/include/core/SkColor.h"
+ 
+ // Must come after all headers that specialize FromJniType() / ToJniType().
+ #include "chrome/browser/ui/android/extensions/jni_headers/ExtensionActionPopupContents_jni.h"
+@@ -34,6 +37,17 @@ namespace {
  constexpr gfx::Size kMinSize = {25, 25};
  constexpr gfx::Size kMaxSize = {800, 600};
  
@@ -33,12 +37,23 @@ index 5b7959f..63a70a2 100644
  }  // namespace
  
  ExtensionActionPopupContents::ExtensionActionPopupContents(
-@@ -121,7 +134,38 @@ void ExtensionActionPopupContents::LoadInitialPage(JNIEnv* env) {
+@@ -121,7 +135,49 @@ void ExtensionActionPopupContents::LoadInitialPage(JNIEnv* env) {
  
  void ExtensionActionPopupContents::SetUpNewMainFrame(
      RenderFrameHost* render_frame_host) {
 -  render_frame_host->GetView()->EnableAutoResize(kMinSize, kMaxSize);
 +  ApplyAutoResizeBounds(render_frame_host);
++
++  // ポップアップは自動リサイズで内容の高さに合わせてレイアウトされるが、
++  // 描画領域 (BottomSheet の高さ) はそれより高いため、余った下側がページの
++  // 既定背景色 (白) で塗られてしまう。ビューのサイズを変えると ThinWebView の
++  // 描画が止まるため (Patch 09 のコメント参照)、ここでは背景を透過にして
++  // 余白から背後のページが見えるようにする。
++  // 注: ポップアップ自身が背景色を指定していない場合、ポップアップ本体も
++  // 透けることになる。実用上の拡張機能はほぼ body に背景色を持つ。
++  if (render_frame_host->GetView()) {
++    render_frame_host->GetView()->SetBackgroundColor(SK_ColorTRANSPARENT);
++  }
 +}
 +
 +void ExtensionActionPopupContents::ApplyAutoResizeBounds(

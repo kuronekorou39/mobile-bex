@@ -1,11 +1,11 @@
-import os
+#!/usr/bin/env python3
+"""logcat のバッファを消去する。"""
 import subprocess
-ADB = r'C:\Android\platform-tools\adb.exe'
-# 端末シリアル。BEX_DEVICE_SERIAL で上書きできる (adb devices で確認)。
-SERIAL = os.environ.get('BEX_DEVICE_SERIAL', '54231JEBF06373')
+
+from bex_env import ADB, adb
 
 try:
-    r = subprocess.run([ADB, '-s', SERIAL, 'logcat', '-c'], capture_output=True, timeout=15)
+    r = adb('logcat', '-c', timeout=15)
     print(f"logcat -c return: {r.returncode}")
     if r.stderr:
         print(f"stderr: {r.stderr.decode(errors='replace')}")

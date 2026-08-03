@@ -9,18 +9,14 @@ import sys
 import os
 import time
 
-ADB = r'C:\Android\platform-tools\adb.exe'
-# 端末シリアル。BEX_DEVICE_SERIAL で上書きできる (adb devices で確認)。
-SERIAL = os.environ.get('BEX_DEVICE_SERIAL', '54231JEBF06373')
-PKG = 'org.chromium.chrome'
-REMOTE_PATH = f'/data/data/{PKG}/app_chrome/Default/Preferences'
-# タイムスタンプ付きにして上書き破壊を防ぐ
-LOCAL_BACKUP = rf'C:\projects\mobile-bex\Preferences.backup.{time.strftime("%Y%m%d-%H%M%S")}.json'
-LOCAL_FIXED = r'C:\projects\mobile-bex\Preferences.fixed.json'
-SDCARD_TMP = '/sdcard/Preferences.fixed.json'
+from bex_env import (
+    ADB, MAIN_ACTIVITY, PACKAGE as PKG, REMOTE_PREFS as REMOTE_PATH,
+    SERIAL, adb, work_path,
+)
 
-def adb(*args, capture=True):
-    return subprocess.run([ADB, '-s', SERIAL, *args], capture_output=capture)
+# タイムスタンプ付きにして上書き破壊を防ぐ
+LOCAL_BACKUP = work_path(f'Preferences.backup.{time.strftime("%Y%m%d-%H%M%S")}.json')
+LOCAL_FIXED = work_path('Preferences.fixed.json')
 
 print("Step 1: Pull current Preferences from device via run-as...")
 result = subprocess.run(
@@ -133,4 +129,4 @@ adb('shell', 'rm', DEVICE_TMP)
 
 print()
 print("DONE. Devtools-related extensions have been removed from Preferences.")
-print("Now run: adb shell am start -n org.chromium.chrome/com.google.android.apps.chrome.Main")
+print(f"Now run: adb shell am start -n {MAIN_ACTIVITY}")

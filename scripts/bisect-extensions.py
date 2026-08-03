@@ -10,13 +10,14 @@ import sys
 import time
 import os
 
-ADB = r'C:\Android\platform-tools\adb.exe'
-# 端末シリアル。BEX_DEVICE_SERIAL で上書きできる (adb devices で確認)。
-SERIAL = os.environ.get('BEX_DEVICE_SERIAL', '54231JEBF06373')
-PKG = 'org.chromium.chrome'
-REMOTE_PATH = f'/data/data/{PKG}/app_chrome/Default/Preferences'
-BACKUP_FULL = r'C:\projects\mobile-bex\Preferences.allext.backup.json'
-LOCAL_FIXED = r'C:\projects\mobile-bex\Preferences.bisect.json'
+from bex_env import (
+    ADB, MAIN_ACTIVITY, PACKAGE as PKG, REMOTE_PREFS as REMOTE_PATH,
+    SERIAL, adb, work_path,
+)
+
+# strip-all-extensions.py が保存したバックアップ (最新のものを使う)。
+BACKUP_FULL = os.environ.get('BEX_PREFS_BACKUP', '')
+LOCAL_FIXED = work_path('Preferences.bisect.json')
 DEVICE_TMP = '/data/local/tmp/Preferences.bisect.json'
 
 # Preferences 内の拡張機能パスに含まれるディレクトリ名 (test-extensions/<名前>)
@@ -34,9 +35,6 @@ ORDER = [
 
 BOOT_MARKER = 'cr_TopSites: Finished saving'
 WAIT_SECONDS = 18
-
-def adb(*args, capture=True, **kw):
-    return subprocess.run([ADB, '-s', SERIAL, *args], capture_output=capture, **kw)
 
 def pull_prefs():
     r = subprocess.run(
@@ -67,7 +65,7 @@ def restart_and_wait():
     adb('shell', 'am', 'force-stop', PKG)
     time.sleep(1)
     adb('logcat', '-c')
-    adb('shell', 'am', 'start', '-n', f'{PKG}/com.google.android.apps.chrome.Main')
+    adb('shell', 'am', 'start', '-n', MAIN_ACTIVITY)
     time.sleep(WAIT_SECONDS)
 
 def check_booted():
@@ -84,6 +82,18 @@ def check_booted():
     }
 
 print("=== Loading backup (full extension list) ===")
+if not BACKUP_FULL:
+    # strip-all-extensions.py が .work/ に残した最新のバックアップを使う
+    import glob
+    candidates = sorted(glob.glob(work_path('Preferences.allext.backup.*.json')))
+    if not candidates:
+        sys.exit(
+            "拡張機能入りの Preferences バックアップが見つかりません。\n"
+            "先に strip-all-extensions.py を実行するか、BEX_PREFS_BACKUP で指定してください。"
+        )
+    BACKUP_FULL = candidates[-1]
+    print(f"  using: {BACKUP_FULL}")
+
 with open(BACKUP_FULL, encoding='utf-8') as f:
     backup = json.load(f)
 backup_settings = backup.get('extensions', {}).get('settings', {})

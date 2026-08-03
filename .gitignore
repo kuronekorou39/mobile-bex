@@ -11,3 +11,4 @@ Preferences*.json
 bex-screen*.png
 bex-test-*.zip
 __pycache__/
+.work/

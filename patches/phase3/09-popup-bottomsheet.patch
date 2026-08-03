@@ -17,10 +17,10 @@ index 0000000..c55b43f
 +</resources>
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java
 new file mode 100644
-index 0000000..393873a
+index 0000000..3d78b14
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,140 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -39,6 +39,7 @@ index 0000000..393873a
 +import org.chromium.build.annotations.Nullable;
 +import org.chromium.chrome.browser.ui.extensions.R;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
++import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent.HeightMode;
 +import org.chromium.components.thinwebview.ThinWebView;
 +
 +/**
@@ -118,12 +119,15 @@ index 0000000..393873a
 +
 +    @Override
 +    public float getFullHeightRatio() {
-+        return FULL_HEIGHT_RATIO;
++        // 内容の高さに追従させる。固定比率だと、ポップアップが短いときに
++        // 下側がシートの背景色 (白) で埋まってしまうため。
++        return HeightMode.WRAP_CONTENT;
 +    }
 +
 +    @Override
 +    public float getHalfHeightRatio() {
-+        return HALF_HEIGHT_RATIO;
++        // WRAP_CONTENT と half 状態は併用できない。
++        return HeightMode.DISABLED;
 +    }
 +
 +    @Override
@@ -159,7 +163,7 @@ index 0000000..393873a
 +}
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
 new file mode 100644
-index 0000000..d6860e7
+index 0000000..d65efe3
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java
 @@ -0,0 +1,227 @@
@@ -349,14 +353,14 @@ index 0000000..d6860e7
 +            // 一度だけ要求する (再入するとレイアウトが振動するため)。
 +            mRequestedFullWidth = true;
 +            mContents.setFullWidth();
-+            mSheetContent.setPopupViewSize(
-+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
++            // 幅は全幅、高さは内容に合わせる (シートは WRAP_CONTENT なので
++            // ここで指定した高さがそのままシートの高さになる)。
++            mSheetContent.setPopupViewSize(FrameLayout.LayoutParams.MATCH_PARENT, heightPx);
 +            return;
 +        }
 +
 +        if (mRequestedFullWidth) {
-+            mSheetContent.setPopupViewSize(
-+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
++            mSheetContent.setPopupViewSize(FrameLayout.LayoutParams.MATCH_PARENT, heightPx);
 +            return;
 +        }
 +

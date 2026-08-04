@@ -1,0 +1,25 @@
+BEX — サードパーティのライセンスについて
+=========================================
+
+本リポジトリのパッチとスクリプトのライセンスは LICENSE を参照してください
+(BSD-3-Clause)。
+
+Chromium
+--------
+本プロジェクトは Chromium (https://chromium.googlesource.com/chromium/src/) を
+改変したものです。Chromium は Copyright The Chromium Authors、BSD-3-Clause の
+下で提供されています。patches/ 配下のパッチファイルには、文脈として Chromium の
+コードが含まれます。
+
+FFmpeg
+------
+バイナリ配布物には FFmpeg (https://ffmpeg.org/) が同梱されます。FFmpeg は
+GNU Lesser General Public License version 2.1 以降 (LGPL v2.1+) の下で提供されて
+おり、バイナリを配布する場合はそのソースの入手可能性を確保する義務があります。
+使用している FFmpeg のバージョンは、ベースとした Chromium のバージョン
+(docs/build-environment.md 参照) に同梱されているものです。
+
+その他
+------
+Chromium が同梱する多数のサードパーティコンポーネントのライセンス表記は、
+アプリ内の chrome://credits から確認できます。

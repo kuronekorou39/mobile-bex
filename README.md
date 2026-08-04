@@ -60,10 +60,12 @@ Chromium 本体に 28 本のパッチを当てています。一覧は
 
 ## ライセンス
 
-本リポジトリのパッチとスクリプトは [BSD-3-Clause](LICENSE) です。ベースとなる Chromium も
-BSD-3-Clause ですが、**同梱している FFmpeg は LGPL v2.1+** であり、バイナリを
-配布する場合はそのソースの入手可能性を確保する必要があります。third-party の
-ライセンス表記はアプリ内の `chrome://credits` から確認できます。
+本リポジトリのパッチとスクリプトは [BSD-3-Clause](LICENSE) です。
+
+ベースとなる Chromium も BSD-3-Clause ですが、**同梱している FFmpeg は LGPL v2.1+**
+であり、バイナリを配布する場合はそのソースの入手可能性を確保する必要があります。
+詳細は [NOTICE](NOTICE) を参照してください。third-party のライセンス表記は
+アプリ内の `chrome://credits` から確認できます。
 
 ## ドキュメント
 

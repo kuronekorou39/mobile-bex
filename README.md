@@ -23,6 +23,13 @@ Chrome 拡張機能が動く Android ブラウザ。Chromium を改造し、PC �
 許可してインストールしてください。パッケージ名は `com.rou39.bex` で、
 Chrome / Chromium とは別のアプリとして共存します。
 
+### 更新を受け取る
+
+Play ストア経由ではないため自動更新はされません。
+[Obtainium](https://github.com/ImranR98/Obtainium) にこのリポジトリの URL を
+登録しておくと、新しいリリースを検知して更新できます。
+詳細は [docs/updates.md](docs/updates.md) を参照してください。
+
 > [!WARNING]
 > **実験的なビルドです。常用は推奨しません。**
 > セキュリティ更新は保証されません（Chromium は約4週間ごとに脆弱性修正を出しますが、
@@ -43,7 +50,7 @@ Chrome / Chromium とは別のアプリとして共存します。
 
 ## 仕組み
 
-Chromium 本体に 27 本のパッチを当てています。一覧は
+Chromium 本体に 28 本のパッチを当てています。一覧は
 [patches/README.md](patches/README.md)、実装の詳細と検証結果は
 [docs/](docs/) 以下にあります。
 
@@ -65,6 +72,7 @@ BSD-3-Clause ですが、**同梱している FFmpeg は LGPL v2.1+** であり�
 | [vision.md](docs/vision.md) | プロジェクトの当初構想 |
 | [build-environment.md](docs/build-environment.md) | ビルド環境の構築 |
 | [release.md](docs/release.md) | 配布用ビルドの作り方 |
+| [updates.md](docs/updates.md) | バージョン管理と更新の届け方 |
 | [upstream-issues.md](docs/upstream-issues.md) | 特定した上流バグと修正 |
 | [patches/README.md](patches/README.md) | パッチ一覧 |
 | [phase1-results.md](docs/phase1-results.md) / [phase2-results.md](docs/phase2-results.md) | 基盤・API の検証結果 |

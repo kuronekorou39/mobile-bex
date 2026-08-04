@@ -67,6 +67,22 @@ ARGS_EOF
 chrome_public_manifest_package = "com.rou39.bex"
 ARGS_EOF
 
+  # バージョン。Chromium 由来の versionCode はリベースしないと変わらず、
+  # 同じ Chromium 版で2回リリースすると端末が更新を受け付けないため独自に管理する。
+  local version_name version_code
+  version_name="$(grep -oP '^NAME=\K.*' "$PROJECT_ROOT/VERSION" || true)"
+  version_code="$(grep -oP '^CODE=\K.*' "$PROJECT_ROOT/VERSION" || true)"
+  if [[ -z "$version_name" || -z "$version_code" ]]; then
+    echo "ERROR: $PROJECT_ROOT/VERSION から NAME / CODE を読めません" >&2
+    exit 1
+  fi
+  {
+    echo ''
+    echo '# BEX 独自のバージョン (VERSION ファイルから生成)'
+    echo "android_override_version_name = \"$version_name\""
+    echo "android_override_version_code = \"$version_code\""
+  } >> "$args_file"
+
   if $IS_RELEASE; then
     cat >> "$args_file" << 'ARGS_EOF'
 
@@ -159,7 +175,8 @@ ARGS_EOF
   echo ""
   echo "args.gn の内容:"
   echo "---"
-  cat "$args_file"
+  # 署名鍵のパスワードは伏せる (ログや画面に残さない)
+  sed 's/^\(android_keystore_password = \).*/\1"***"/' "$args_file"
   echo "---"
 }
 

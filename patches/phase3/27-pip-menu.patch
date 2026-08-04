@@ -1,0 +1,149 @@
+# Patch 27: 三点メニューに「小窓表示」(picture-in-picture) を追加
+# 上流の PiP は全画面再生中の動画が1つあるときにしか発動せず、複数配信を
+# 並べるような拡張機能では使えない。動画の有無に関係なく Activity ごと
+# 小窓化する (Custom Tab の最小化と同じ手法)。
+diff --git a/chrome/android/java/res/values/ids.xml b/chrome/android/java/res/values/ids.xml
+index 56f0bd2..44a0734 100644
+--- a/chrome/android/java/res/values/ids.xml
++++ b/chrome/android/java/res/values/ids.xml
+@@ -134,6 +134,7 @@ found in the LICENSE file.
+     <item type="id" name="reload_menu_id" />
+     <item type="id" name="update_menu_id" />
+     <item type="id" name="new_tab_menu_id" />
++    <item type="id" name="bex_pip_menu_id" />
+     <item type="id" name="new_incognito_tab_menu_id" />
+     <item type="id" name="add_to_group_menu_id" />
+     <item type="id" name="pin_tab_menu_id" />
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+index 6a3d726..eb1f906 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -16,6 +16,7 @@ import static org.chromium.chrome.browser.ui.IncognitoRestoreAppLaunchDrawBlocke
+ import static org.chromium.chrome.browser.ui.IncognitoRestoreAppLaunchDrawBlocker.SUPPORTED_PROFILE_TYPE;
+ import static org.chromium.chrome.browser.url_constants.UrlConstantResolver.getOriginalNativeNtpUrl;
+ 
++import android.app.PictureInPictureParams;
+ import android.app.Activity;
+ import android.app.ApplicationStartInfo;
+ import android.content.Context;
+@@ -30,6 +31,7 @@ import android.os.Bundle;
+ import android.os.PersistableBundle;
+ import android.os.SystemClock;
+ import android.provider.Browser;
++import android.util.Rational;
+ import android.text.TextUtils;
+ import android.text.format.DateUtils;
+ import android.util.Pair;
+@@ -394,6 +396,9 @@ import java.util.function.Supplier;
+  * accessible via a chrome specific tab switching UI.
+  */
+ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachIntentObserver {
++    /** mobile-bex: 小窓表示のアスペクト比。配信の視聴を想定して 16:9。 */
++    private static final Rational BEX_PIP_ASPECT_RATIO = new Rational(16, 9);
++
+     // Name of the ChromeTabbedActivity alias that handles MAIN intents.
+     public static final String MAIN_LAUNCHER_ACTIVITY_NAME = "com.google.android.apps.chrome.Main";
+ 
+@@ -1703,6 +1708,32 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+                 !mFromResumption);
+     }
+ 
++    /**
++     * mobile-bex: ブラウザ全体を picture-in-picture の小窓に縮小する。
++     *
++     * <p>上流の PiP は「全画面再生中の動画が1つある」ときにしか発動しないため、
++     * 複数の配信を並べるような拡張機能では使えない。ここでは動画の有無に関係なく
++     * Activity ごと小窓化する (Custom Tab の最小化と同じ手法)。
++     */
++    private void enterPictureInPictureFromMenu() {
++        if (isInPictureInPictureMode() || isFinishing()) return;
++
++        PictureInPictureParams.Builder builder =
++                new PictureInPictureParams.Builder()
++                        .setAspectRatio(BEX_PIP_ASPECT_RATIO);
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            builder.setSeamlessResizeEnabled(false);
++        }
++
++        // 端末によっては framework 側で例外が投げられることがある。小窓化に
++        // 失敗してもブラウザごと落とす理由はないので、握って続行する。
++        try {
++            enterPictureInPictureMode(builder.build());
++        } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
++            Log.w(TAG, "Failed to enter picture-in-picture", e);
++        }
++    }
++
+     @Override
+     public void onNewIntent(Intent intent) {
+         try (TraceEvent e = TraceEvent.scoped("ChromeTabbedActivity.onNewIntent")) {
+@@ -4025,6 +4056,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+                 NewTabPageUma.recordAction(NewTabPageUma.ACTION_OPENED_RECENT_TABS_MANAGER);
+             }
+             RecordUserAction.record("MobileMenuRecentTabs");
++        } else if (id == R.id.bex_pip_menu_id) {
++            enterPictureInPictureFromMenu();
++            RecordUserAction.record("MobileMenuBexPip");
+         } else if (id == R.id.extensions_menu_id) {
+             LoadUrlParams params =
+                     new LoadUrlParams(
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+index 9490a75..0534aea 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+@@ -8,6 +8,7 @@ import static org.chromium.build.NullUtil.assertNonNull;
+ import static org.chromium.build.NullUtil.assumeNonNull;
+ 
+ import android.content.Context;
++import android.content.pm.PackageManager;
+ import android.content.res.Resources;
+ import android.graphics.drawable.Drawable;
+ import android.util.SparseArray;
+@@ -304,6 +305,9 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+         // Recent Tabs
+         if (shouldShowRecentTabsItem()) modelList.add(buildRecentTabsItem());
+ 
++        // 小窓表示 (picture-in-picture)
++        if (shouldShowPipItem()) modelList.add(buildPipItem());
++
+         // Extensions
+         if (shouldShowExtensionsItem()) {
+             if (ChromeFeatureList.isEnabled(ChromeFeatureList.SUBMENUS_IN_APP_MENU)) {
+@@ -683,6 +687,23 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+                         shouldShowIconBeforeItem() ? R.drawable.devices_black_24dp : 0));
+     }
+ 
++    /**
++     * mobile-bex: 端末が picture-in-picture に対応しているかどうか。
++     * ChromeTabbedActivity は AndroidManifest で supportsPictureInPicture を
++     * 宣言済みなので、あとは端末側の対応可否だけを見る。
++     */
++    private boolean shouldShowPipItem() {
++        return mContext.getPackageManager()
++                .hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
++    }
++
++    private MVCListAdapter.ListItem buildPipItem() {
++        return new MVCListAdapter.ListItem(
++                AppMenuHandler.AppMenuItemType.STANDARD,
++                buildModelForStandardMenuItem(
++                        R.id.bex_pip_menu_id, R.string.bex_menu_pip, /* iconResId= */ 0));
++    }
++
+     private boolean shouldShowExtensionsItem() {
+         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
+         return ExtensionUi.isEnabled(getProfileFromTabModel());
+diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+index 7bd9c78..83a0c39 100644
+--- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
++++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+@@ -4314,6 +4314,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+       <message name="IDS_MENU_RECENT_TABS" desc="Menu item for opening the 'Recent tabs' page that shows recently closed tabs and pages the user has opened on his/her other devices. [CHAR_LIMIT=27]">
+         Recent tabs
+       </message>
++      <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
++        小窓表示
++      </message>
+       <message name="IDS_MENU_EXTENSIONS" desc="Menu item for opening the 'Extensions' page that allows the user to manage installed extensions. [CHAR_LIMIT=27]">
+         Extensions
+       </message>

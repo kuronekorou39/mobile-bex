@@ -51,6 +51,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 25 | `25-popup-width-transparency.patch` | ポップアップの幅の扱いを改善（全幅化 / 見切れ防止） |
 | 26 | `26-webstore-desktop-site.patch` | Chrome ウェブストアを既定でデスクトップ表示にする |
 | 27 | `27-pip-menu.patch` | 三点メニューに「小窓表示」(PiP) を追加。PiP 中はツールバーを隠す |
+| 28 | `28-ntp-hide-unusable.patch` | 新規タブの「AI モード」ボタンとおすすめ記事フィードを消す |
 
 ### 欠番について
 
@@ -92,9 +93,26 @@ out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
 ## パッチ作成規則
 
 - ファイル名は `NN-short-description.patch` 形式（NNは適用順序）
-- **必ず適用対象の状態のツリーから `git diff` で生成する**（hunk ヘッダの手編集は
-  corrupt patch の原因になるため禁止。過去に 09/10/13/14 で発生）
-- 累積 diff にしない: パッチ NN は 01〜(NN-1) 適用後のツリーとの差分にする
 - パッチ先頭にコメントで目的と変更概要を記載
-- 生成後は clean なツリーで `./scripts/apply-patches.sh --dry-run` が全件 OK に
-  なることを確認する
+- **手書きしない**。ソースツリーを編集したら `scripts/regen-patches.py` で
+  生成・検証する（hunk ヘッダの手編集は corrupt patch の原因になるため禁止。
+  過去に 09/10/13/14 で発生）
+
+```bash
+# 検証のみ: クリーンなツリーに 01→NN を全適用し、作業ツリーと一致するか確かめる
+python3 scripts/regen-patches.py
+
+# 既存パッチの担当ファイルを編集した後に作り直す
+python3 scripts/regen-patches.py --regen 09,25
+
+# 新しいパッチを足す（初回だけ担当ファイルを教える。以降は --regen だけでよい）
+printf '# Patch 29: ...\n' > patches/phase3/29-foo.patch
+python3 scripts/regen-patches.py --regen 29 --files path/to/a.java,path/to/b.cc
+```
+
+パッチは順番に重ねる差分なので、同じファイルを複数のパッチが触ることがある
+（例: 04 が作ったクラスを 09 が変更する）。`--regen` で指定しなかったパッチは
+そのまま適用されて土台になるため、累積 diff にはならない。
+
+コミット前には `scripts/validate-patches.py`（改行コードと hunk 行数の検査）も
+通すこと。CI でも実行される。

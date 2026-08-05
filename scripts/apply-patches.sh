@@ -16,6 +16,7 @@ DRY_RUN=""
 REVERSE=""
 TOTAL_APPLIED=0
 TOTAL_FAILED=0
+TOTAL_SKIPPED=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -26,6 +27,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# 「すでに適用済みか」を判定するために逆向きの適用を試すので、その向きを持つ
+OPPOSITE="--reverse"
+[[ -n "$REVERSE" ]] && OPPOSITE=""
+
+# 作業ツリーにすでに変更があるか。ある場合、個々のパッチの可否は正しく判定できない
+# （後のパッチが同じファイルをさらに変更していると、単体では前にも後ろにも当たらない）
+DIRTY=""
+
 if [[ ! -d "$CHROMIUM_SRC" ]]; then
   echo "ERROR: Chromiumソースが見つかりません: $CHROMIUM_SRC"
   echo "先に ./scripts/setup.sh を実行してください"
@@ -34,6 +43,16 @@ fi
 
 echo "=== mobile-bex: パッチ適用 (Phase $PHASE) ==="
 echo "Chromium src: $CHROMIUM_SRC"
+
+if [[ -n "$(git -C "$CHROMIUM_SRC" status --porcelain)" ]]; then
+  DIRTY="1"
+  echo ""
+  echo "注意: 作業ツリーにすでに変更があります。この状態では個々のパッチが"
+  echo "      当たるかどうかを正しく判定できません（後のパッチが同じファイルを"
+  echo "      さらに変更しているため、単体では前にも後ろにも当たらない）。"
+  echo "      パッチの健全性は次で確認してください:"
+  echo "        python3 scripts/regen-patches.py"
+fi
 echo ""
 
 apply_phase() {
@@ -47,6 +66,7 @@ apply_phase() {
 
   local patch_count=0
   local fail_count=0
+  local skip_count=0
 
   # ゼロ埋め番号付きファイル名なので glob のソート順 = 適用順
   local patch_files=("$phase_dir"/*.patch)
@@ -78,18 +98,28 @@ apply_phase() {
         echo "OK (dry-run)"
       fi
       patch_count=$((patch_count + 1))
+    elif git -C "$CHROMIUM_SRC" apply $OPPOSITE --check "$patch_file" &>/dev/null; then
+      # 逆向きに当てられる = すでに適用済み。破損ではないので失敗として数えない
+      # (作業ツリーはパッチ適用済みなのが通常の状態で、そこで --dry-run すると
+      #  全件が「失敗」に見えてしまい、本物の破損と区別がつかなかった)
+      echo "スキップ (適用済み)"
+      skip_count=$((skip_count + 1))
+    elif [[ -n "$DIRTY" ]]; then
+      echo "判定不能 (ツリーに変更あり)"
+      skip_count=$((skip_count + 1))
     else
       echo "FAILED"
       fail_count=$((fail_count + 1))
-      # git apply のエラーをそのまま表示（already applied か context 不一致かを判別できるように）
+      # git apply のエラーをそのまま表示（context 不一致の箇所を特定できるように）
       sed 's/^/    | /' <<< "$apply_err"
     fi
   done
 
   echo ""
-  echo "  Phase $phase_num: $patch_count 適用成功, $fail_count 失敗"
+  echo "  Phase $phase_num: $patch_count 適用成功, $skip_count 適用済み/判定不能, $fail_count 失敗"
   TOTAL_APPLIED=$((TOTAL_APPLIED + patch_count))
   TOTAL_FAILED=$((TOTAL_FAILED + fail_count))
+  TOTAL_SKIPPED=$((TOTAL_SKIPPED + skip_count))
 }
 
 # Apply patches for specified phase(s)
@@ -130,7 +160,13 @@ else
   echo "=== パッチ適用完了 ==="
 fi
 
+if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+  echo "$TOTAL_SKIPPED 件は適用済みか判定不能でした（作業中のツリーでは通常の状態です）。"
+fi
+
 if [[ "$TOTAL_FAILED" -gt 0 ]]; then
   echo "WARNING: $TOTAL_FAILED 件のパッチが適用できませんでした。上記エラーを確認してください。"
+  echo "         パッチ自体の健全性は次で確認できます:"
+  echo "           python3 scripts/regen-patches.py"
   exit 1
 fi

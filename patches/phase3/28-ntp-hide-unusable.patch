@@ -1,0 +1,49 @@
+# Patch 28: 新規タブから、この構成では機能しない UI を消す
+# 「AI モード」ボタンと、おすすめ記事フィード (Discover)。どちらも Google の
+# 各種サービス連携が前提で、自前ビルドでは押しても何も起きないか
+# 「おすすめの記事を更新できません」というエラーだけが残る。
+# フィードは pref なので、ユーザーが設定から表示に戻すことは引き続き可能。
+diff --git a/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java b/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java
+index 7fc5b6a..9c06fbe 100644
+--- a/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java
++++ b/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java
+@@ -21,7 +21,6 @@ import org.jni_zero.NativeMethods;
+ import org.chromium.base.ResettersForTesting;
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+ import org.chromium.chrome.browser.profiles.Profile;
+ import org.chromium.chrome.browser.theme.ThemeUtils;
+ import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
+@@ -40,12 +39,10 @@ public class ComposeplateUtils {
+      */
+     public static boolean isComposeplateEnabled(boolean isTablet, Profile profile) {
+         if (sIsEnabledForTesting) return true;
+-        if (!ComposeplateUtilsJni.get().isAimEntrypointEligible(profile)) return false;
+ 
+-        if (!isTablet) return true;
+-
+-        return ChromeFeatureList.sAndroidComposeplateLFF.isEnabled()
+-                && ComposeplateUtilsJni.get().isAimEntrypointLFFEligible(profile);
++        // mobile-bex: 新規タブの「AI モード」ボタンは Google アカウント連携を前提と
++        // しており、自前ビルドでは押しても機能しない。使えない導線は出さない。
++        return false;
+     }
+ 
+     /**
+diff --git a/components/feed/core/shared_prefs/pref_names.cc b/components/feed/core/shared_prefs/pref_names.cc
+index 50f880e..de9983e 100644
+--- a/components/feed/core/shared_prefs/pref_names.cc
++++ b/components/feed/core/shared_prefs/pref_names.cc
+@@ -25,7 +25,10 @@ const char kEnableSnippetsByDse[] = "ntp_snippets_by_dse.enable";
+ 
+ void RegisterFeedSharedProfilePrefs(PrefRegistrySimple* registry) {
+   registry->RegisterBooleanPref(kEnableSnippets, true);
+-  registry->RegisterBooleanPref(kArticlesListVisible, true);
++  // mobile-bex: おすすめ記事 (Discover) は自前ビルドでは取得できず、
++  // 「おすすめの記事を更新できません」というエラーだけが残るため既定で隠す。
++  // ユーザーが設定から表示に戻すことは引き続き可能。
++  registry->RegisterBooleanPref(kArticlesListVisible, false);
+   registry->RegisterBooleanPref(kEnableSnippetsByDse, true);
+ }
+ 

@@ -1,6 +1,11 @@
 # Patch 26: Chrome ウェブストアを既定でデスクトップ表示にする
 # モバイル表示ではストアが「パソコンからアクセスして」としか返さず、
 # 拡張機能を導入できないため。初回のみ設定し、以後はユーザーの選択を尊重する。
+#
+# 例外はホスト単位で張る。Chromium の setRequestDesktopSiteContentSettingsForUrl は
+# 登録可能ドメインまで丸めた例外 ([*.]google.com) を作るため、それを使うと
+# Google 検索まで PC 版になってしまう (初版がこの不具合を出した)。
+# 初期設定には版番号を持たせ、内容を作り直したら一度だけ入れ直す。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 index 41b556c..4806572 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
@@ -17,33 +22,49 @@ index 41b556c..4806572 100644
      }
  
 diff --git a/chrome/browser/android/preferences/browser_prefs_android.cc b/chrome/browser/android/preferences/browser_prefs_android.cc
-index 7ec131d..8d027b5 100644
+index 7ec131d..93aa8d3 100644
 --- a/chrome/browser/android/preferences/browser_prefs_android.cc
 +++ b/chrome/browser/android/preferences/browser_prefs_android.cc
 @@ -24,6 +24,7 @@ void RegisterPrefs(PrefRegistrySimple* registry) {
  void RegisterUserProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
    NotificationPlatformBridgeAndroid::RegisterProfilePrefs(registry);
    registry->RegisterBooleanPref(prefs::kDesktopSiteWindowSettingEnabled, false);
-+  registry->RegisterBooleanPref(prefs::kBexWebStoreDesktopSiteSeeded, false);
++  registry->RegisterIntegerPref(prefs::kBexWebStoreDesktopSiteSeedVersion, 0);
  }
  
  }  // namespace android
 diff --git a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
-index 13dd08d..b54783f 100644
+index 13dd08d..3342ea6 100644
 --- a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
 +++ b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
-@@ -56,6 +56,39 @@ public class DesktopSiteUtils {
+@@ -56,6 +56,73 @@ public class DesktopSiteUtils {
      static final int DEFAULT_GLOBAL_SETTING_DEFAULT_ON_SMALLEST_SCREEN_WIDTH_THRESHOLD_DP = 600;
      static final int DEFAULT_GLOBAL_SETTING_DEFAULT_ON_MEMORY_LIMIT_THRESHOLD_MB = 6500;
  
 +    /**
-+     * mobile-bex: Chrome ウェブストアのドメイン。モバイルの User-Agent では
++     * mobile-bex: Chrome ウェブストアのホスト。モバイルの User-Agent では
 +     * 「パソコンからアクセスしてください」というページしか返さないため、
 +     * 拡張機能を導入できない。
++     *
++     * <p>ホスト単位で指定する。{@link #setRequestDesktopSiteContentSettingsForUrl}
++     * は使えない: あれは登録可能ドメイン ([*.]google.com) まで丸めた例外を作るため、
++     * Google 検索まで巻き込んでデスクトップ表示にしてしまう。
 +     */
-+    private static final String[] WEB_STORE_URLS = {
-+        "https://chromewebstore.google.com/", "https://chrome.google.com/webstore/",
++    private static final String[] WEB_STORE_HOSTS = {
++        "chromewebstore.google.com", "chrome.google.com",
 +    };
++
++    /**
++     * mobile-bex: 旧版が誤って作っていた、google.com 全体のデスクトップ表示例外。
++     * 作り直しの際に取り消す。
++     */
++    private static final String LEGACY_OVER_BROAD_PATTERN = "[*.]google.com";
++
++    /**
++     * mobile-bex: 現在の初期設定の版。設定内容を作り直したときに上げると、更新後の
++     * 初回起動で一度だけ入れ直される。
++     */
++    private static final int WEB_STORE_DESKTOP_SITE_SEED_VERSION = 2;
 +
 +    /**
 +     * mobile-bex: 初回起動時に一度だけ、Chrome ウェブストアをデスクトップ表示に
@@ -51,8 +72,8 @@ index 13dd08d..b54783f 100644
 +     *
 +     * <p>ウェブストアはモバイル表示だと利用できず、拡張機能を動かすことが目的の
 +     * このブラウザでは機能欠落に等しいため、既定でデスクトップ表示にする。
-+     * ただし押しつけにならないよう、設定を入れるのは一度だけとし、ユーザーが
-+     * 後からモバイル表示に戻した場合はその選択を尊重する。
++     * ただし押しつけにならないよう、設定を入れるのは版ごとに一度だけとし、
++     * ユーザーが後からモバイル表示に戻した場合はその選択を尊重する。
 +     *
 +     * @param profile 対象プロファイル。
 +     */
@@ -60,12 +81,30 @@ index 13dd08d..b54783f 100644
 +        if (profile == null || profile.isOffTheRecord()) return;
 +
 +        PrefService prefService = UserPrefs.get(profile);
-+        if (prefService.getBoolean(PrefNames.BEX_WEB_STORE_DESKTOP_SITE_SEEDED)) return;
-+        prefService.setBoolean(PrefNames.BEX_WEB_STORE_DESKTOP_SITE_SEEDED, true);
++        if (prefService.getInteger(PrefNames.BEX_WEB_STORE_DESKTOP_SITE_SEED_VERSION)
++                >= WEB_STORE_DESKTOP_SITE_SEED_VERSION) {
++            return;
++        }
++        prefService.setInteger(
++                PrefNames.BEX_WEB_STORE_DESKTOP_SITE_SEED_VERSION,
++                WEB_STORE_DESKTOP_SITE_SEED_VERSION);
 +
-+        for (String url : WEB_STORE_URLS) {
-+            setRequestDesktopSiteContentSettingsForUrl(
-+                    profile, new GURL(url), /* useDesktopUserAgent= */ true);
++        // 版 1 が google.com 全体に張ってしまった例外を取り消す。これは自分で入れた
++        // 設定の後始末なので、ユーザーが同じ設定を自分で選んでいた場合も一度消える。
++        WebsitePreferenceBridge.setContentSettingCustomScope(
++                profile,
++                ContentSettingsType.REQUEST_DESKTOP_SITE,
++                LEGACY_OVER_BROAD_PATTERN,
++                /* secondaryPattern= */ SITE_WILDCARD,
++                ContentSetting.DEFAULT);
++
++        for (String host : WEB_STORE_HOSTS) {
++            WebsitePreferenceBridge.setContentSettingCustomScope(
++                    profile,
++                    ContentSettingsType.REQUEST_DESKTOP_SITE,
++                    host,
++                    /* secondaryPattern= */ SITE_WILDCARD,
++                    ContentSetting.ALLOW);
 +        }
 +    }
 +
@@ -73,21 +112,23 @@ index 13dd08d..b54783f 100644
       * Set or remove a domain level exception with URL for {@link
       * ContentSettingsType.REQUEST_DESKTOP_SITE}. Clear the subdomain level exception if any.
 diff --git a/components/content_settings/core/common/pref_names.h b/components/content_settings/core/common/pref_names.h
-index 6f03edb..a1228d2 100644
+index 6f03edb..81b7e06 100644
 --- a/components/content_settings/core/common/pref_names.h
 +++ b/components/content_settings/core/common/pref_names.h
-@@ -279,6 +279,14 @@ inline constexpr char kRequestDesktopSiteGlobalSettingUserEnabled[] =
+@@ -279,6 +279,16 @@ inline constexpr char kRequestDesktopSiteGlobalSettingUserEnabled[] =
  // mobile site if the window is narrow.
  inline constexpr char kDesktopSiteWindowSettingEnabled[] =
      "desktop_site.window_setting";
 +
-+// mobile-bex: Whether the one-time desktop-site exception for the Chrome Web
-+// Store has been seeded. The store serves a "please use a desktop computer"
-+// page to mobile user agents, which would make extensions uninstallable on a
-+// browser whose whole purpose is running them. Seeded once so that a user who
-+// later switches the store back to mobile is not overridden on every startup.
-+inline constexpr char kBexWebStoreDesktopSiteSeeded[] =
-+    "bex.web_store_desktop_site_seeded";
++// mobile-bex: Which version of the desktop-site exception for the Chrome Web
++// Store has been seeded (0 = none). The store serves a "please use a desktop
++// computer" page to mobile user agents, which would make extensions
++// uninstallable on a browser whose whole purpose is running them. Seeded once
++// per version so that a user who later switches the store back to mobile is
++// not overridden on every startup, while still allowing a bad seed to be
++// corrected by bumping the version.
++inline constexpr char kBexWebStoreDesktopSiteSeedVersion[] =
++    "bex.web_store_desktop_site_seed_version";
  #endif
  
  }  // namespace prefs

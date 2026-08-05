@@ -60,12 +60,19 @@ ARGS_EOF
 
   echo "target_cpu = \"$TARGET_CPU\"" >> "$args_file"
 
-  cat >> "$args_file" << 'ARGS_EOF'
-
-# アプリのパッケージ名。本家 Chromium (org.chromium.chrome) のままだと
-# 併存できず、配布物としても誤解を招くため固有の名前にする。
-chrome_public_manifest_package = "com.rou39.bex"
-ARGS_EOF
+  # アプリのパッケージ名。本家 Chromium (org.chromium.chrome) のままだと
+  # 併存できず、配布物としても誤解を招くため固有の名前にする。
+  # 開発ビルドは別パッケージにして、配布版と同じ端末に共存できるようにする
+  # (署名鍵が違うため、同じパッケージ名だと上書きインストールできない)。
+  {
+    echo ''
+    echo '# アプリのパッケージ名'
+    if $IS_RELEASE; then
+      echo 'chrome_public_manifest_package = "com.rou39.bex"'
+    else
+      echo 'chrome_public_manifest_package = "com.rou39.bex.dev"'
+    fi
+  } >> "$args_file"
 
   # バージョン。Chromium 由来の versionCode はリベースしないと変わらず、
   # 同じ Chromium 版で2回リリースすると端末が更新を受け付けないため独自に管理する。

@@ -1,9 +1,46 @@
-# Patch 21: アカウント追加でのクラッシュ防止
+# Patch 21: アカウント追加でのクラッシュ防止と、サインイン UI の非表示
 # ChromePublic は NullAccountManagerDelegate のため createAddAccountIntent が
 # UnsupportedOperationException を投げていた。null 返却で既存のエラー処理に乗せる。
 # (Google アカウント統合/Sync 自体は公式 Chrome 限定のため実装不可)
+# 併せて、選んでも何も起きないサインイン導線を隠す:
+#   - 初回起動 (FRE) のウェルカム/サインイン画面を出さずログアウト状態で始める
+#   - ツールバーのアカウントアイコン (IdentityDisc) を表示しない
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
+index 97fd673..a90e2fc 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
+@@ -235,7 +235,13 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
+ 
+     /** Creates first page and sets up adapter. Should result UI being shown on the screen. */
+     private void createFirstPage() {
+-        BooleanSupplier showWelcomePage = () -> !FirstRunStatus.shouldSkipWelcomePage();
++        // mobile-bex: サインイン画面は出さない。このビルドは端末へのアカウント追加に
++        // 対応しておらず、「アカウントを追加」を選んでも何も起きない (Patch 21)。
++        // 選択肢として成立しないので、最初からログアウト状態で開始する。
++        // 表示するページが1つも無くなった場合は completeFirstRunExperience() が
++        // 呼ばれ、markFlowAsCompleted() が EULA の受諾も済ませる
++        // (Setup Wizard で先に同意した場合と同じ経路)。
++        BooleanSupplier showWelcomePage = () -> false;
+         mPages.add(new FirstRunPage<>(SigninFirstRunFragment.class, showWelcomePage));
+         mFreProgressStates.add(MobileFreProgress.WELCOME_SHOWN);
+         mPagerAdapter = new FirstRunPagerAdapter(FirstRunActivity.this, mPages);
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java b/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
+index 56af298..5e4db97 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
+@@ -201,7 +201,9 @@ public class IdentityDiscController
+ 
+         mButtonData.setButtonSpec(
+                 buttonSpecWithDrawableAndDescription(mButtonData.getButtonSpec(), email));
+-        mButtonData.setCanShow(true);
++        // mobile-bex: ツールバーのアカウントアイコンは出さない。端末へのアカウント
++        // 追加に対応していないため、開いても操作できる項目がない (Patch 21)。
++        mButtonData.setCanShow(false);
+     }
+ 
+     private ButtonSpec buttonSpecWithDrawableAndDescription(
 diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
-index fcf64ef942..a30dd1a432 100644
+index fcf64ef..a30dd1a 100644
 --- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 +++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 @@ -50,8 +50,10 @@ public class NullAccountManagerDelegate implements AccountManagerDelegate {

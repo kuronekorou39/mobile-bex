@@ -1,0 +1,42 @@
+# Patch 31: スマホでも「新しいウィンドウ」を出す
+# マルチインスタンスの仕組み自体は上流に揃っている (ChromeTabbedActivity2 が
+# AndroidManifest にあり、new_window_menu_id のハンドラも MultiInstanceManagerImpl
+# にある)。出ていなかったのはメニューの表示条件だけだった。
+#
+# 上流は「On phones, show the menu only when in split-screen」として、スマホでは
+# すでに分割画面に入っているときしか出さない。しかしそれでは分割画面にするために
+# 先に分割画面が要るという堂々巡りで、実質使えない。画面サイズの条件を外し、
+# 2つ目のウィンドウを開いてからタスクスイッチャーで並べられるようにする。
+#
+# インスタンス数の上限 (getMaxInstances) は端末のメモリ量で決まるので触っていない。
+# Pixel 9a では 20 まで許可される。
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+index 3948530..9e415cf 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+@@ -1211,16 +1211,17 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+             if (MultiWindowUtils.getInstanceCountWithFallback(PersistedInstanceType.ACTIVE)
+                     >= MultiWindowUtils.getMaxInstances()) return false;
+ 
+-            // On phones, show the menu only when in split-screen, with a single instance
+-            // running on the foreground.
+-            return isTabletSizeScreen()
+-                    || (!mMultiWindowModeStateDispatcher.isChromeRunningInAdjacentWindow()
+-                            && (mMultiWindowModeStateDispatcher.isInMultiWindowMode()
+-                                    || mMultiWindowModeStateDispatcher.isInMultiDisplayMode()));
++            // mobile-bex: 上流はスマホだと「すでに分割画面に入っている」ときしか出さない
++            // (isTabletSizeScreen() || isInMultiWindowMode() ...)。しかしそれでは
++            // 分割画面にするために先に分割画面が要るという堂々巡りで、実質使えない。
++            // 画面サイズによらず出し、2つ目のウィンドウを開いてからタスクスイッチャーで
++            // 並べられるようにする。配信を見ながら別のページを開く用途で使う。
++            return true;
+         } else {
+             if (mMultiWindowModeStateDispatcher.isMultiInstanceRunning()) return false;
+-            return (mMultiWindowModeStateDispatcher.canEnterMultiWindowMode()
+-                            && isTabletSizeScreen())
++            // mobile-bex: こちらも同じ理由で画面サイズの条件を外す。ただしマルチ
++            // ウィンドウに入れない端末で出しても意味がないので、その判定は残す。
++            return mMultiWindowModeStateDispatcher.canEnterMultiWindowMode()
+                     || mMultiWindowModeStateDispatcher.isInMultiWindowMode()
+                     || mMultiWindowModeStateDispatcher.isInMultiDisplayMode();
+         }

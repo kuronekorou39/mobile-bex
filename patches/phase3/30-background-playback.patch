@@ -1,0 +1,63 @@
+# Patch 30: 画面を消してもアプリを切り替えても再生を続ける
+# 上流の Android は、タブレットやデスクトップ端末でない限り
+# IsBackgroundMediaSuspendEnabled() が必ず true を返し、バックグラウンドに回った
+# 時点でメディアを一時停止する。配信を流しながら他のことをする使い方では困る。
+#
+# PiP のときだけ再生が続いていたのは、ShouldPausePlaybackWhenHidden() が
+# 「Video PiP is the only exception」として PiP を明示的に除外していたため。
+# 小窓を閉じたり画面を消すとこの例外から外れて止まっていた。
+#
+# デスクトップ版と同じ扱い (常に false) にする。これで
+# ShouldPausePlaybackWhenHidden() の IsBackgroundSuspendEnabled() 分岐を通らず、
+# 最後の `return !preserve_audio` に落ちる。つまり音が出ている限り再生を続け、
+# ミュート中の動画はこれまでどおり止まる (無駄に電力を使わない)。
+#
+# is_background_video_playback_enabled は元から true なので触っていない。
+diff --git a/content/public/renderer/render_frame_media_playback_options.cc b/content/public/renderer/render_frame_media_playback_options.cc
+index 5074b48..745b2d8 100644
+--- a/content/public/renderer/render_frame_media_playback_options.cc
++++ b/content/public/renderer/render_frame_media_playback_options.cc
+@@ -4,33 +4,18 @@
+ 
+ #include "content/public/renderer/render_frame_media_playback_options.h"
+ 
+-#include "base/feature_list.h"
+-#include "build/build_config.h"
+-#include "content/public/common/content_features.h"
+-
+-#if BUILDFLAG(IS_ANDROID)
+-#include "base/android/device_info.h"
+-#endif
+-
+ namespace content {
+ bool IsBackgroundMediaSuspendEnabled() {
+-#if BUILDFLAG(IS_ANDROID)
+-  // For Android devices, do not suspend background media for devices with large
+-  // displays. Exception is for Webview.
+-
+-  if (base::FeatureList::IsEnabled(
+-          features::kAndroidEnableBackgroundMediaLargeFormFactors) &&
+-      (base::android::device_info::is_tablet() ||
+-       base::android::device_info::is_desktop())) {
+-    // Do not suspend background media if feature is enabled AND it was launched
+-    // on a large display. Feature is enabled by default except for WebView
+-    return false;
+-  } else {
+-    return true;
+-  }
+-#else
+-  // For non-Android devices, always allow background media to play
++  // mobile-bex: 画面を消したりアプリを切り替えたりしても再生を続ける。
++  //
++  // 上流の Android は、タブレットやデスクトップ端末でない限り必ず true を返す
++  // (= バックグラウンドに回った時点で一時停止する)。配信を流しながら他のことを
++  // する使い方ではこれが困るので、デスクトップ版と同じ扱い (常に false) にする。
++  //
++  // これで WebMediaPlayerImpl::ShouldPausePlaybackWhenHidden() の
++  // IsBackgroundSuspendEnabled() 分岐を通らなくなり、最後の `return
++  // !preserve_audio` に落ちる。つまり音が出ている限り再生を続け、ミュート中の
++  // 動画はこれまでどおり止まる。
+   return false;
+-#endif
+ }
+ }  // namespace content

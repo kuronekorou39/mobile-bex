@@ -1,0 +1,46 @@
+# Patch 32: 拡張機能ページから Chromium ロゴを消す
+# chrome://extensions のツールバー左上とドロワーのヘッダに Chromium のロゴが
+# 出ていた。どちらも <if expr="is_android"> で囲まれた Android 版だけの表示で、
+# ダークテーマでは chrome_logo_dark.svg、ライトでは product_logo.png を使う。
+#
+# このブラウザは Chromium ではないので名乗りとして誤りだし、拡張機能ページの
+# 見出しに製品ロゴは要らないため、画像を差し替えるのではなく消す。
+diff --git a/chrome/browser/resources/extensions/manager.html.ts b/chrome/browser/resources/extensions/manager.html.ts
+index ddc3118..cf96bf4 100644
+--- a/chrome/browser/resources/extensions/manager.html.ts
++++ b/chrome/browser/resources/extensions/manager.html.ts
+@@ -31,13 +31,7 @@ ${this.showDrawer_ ? html`
+           ?enable-enhanced-site-controls="${this.enableEnhancedSiteControls}">
+       </extensions-sidebar>
+     </div>
+-    <if expr="is_android">
+-      <picture slot="header-icon">
+-        <source media="(prefers-color-scheme: dark)"
+-            srcset="//resources/images/chrome_logo_dark.svg">
+-        <img srcset="images/product_logo.png" role="presentation">
+-      </picture>
+-    </if>
++    <!-- mobile-bex: Chromium のロゴは出さない (toolbar.html.ts と同じ理由)。 -->
+   </cr-drawer>` : ''}
+ <div id="container" class="cr-scrollable">
+   <div id="scrollableShadow" class="cr-scrollable-top-shadow"></div>
+diff --git a/chrome/browser/resources/extensions/toolbar.html.ts b/chrome/browser/resources/extensions/toolbar.html.ts
+index df24e31..1d4b431 100644
+--- a/chrome/browser/resources/extensions/toolbar.html.ts
++++ b/chrome/browser/resources/extensions/toolbar.html.ts
+@@ -25,13 +25,8 @@ export function getHtml(this: ToolbarElement) {
+         aria-labelledby="devModeLabel">
+     </cr-toggle>
+   </div>
+-  <if expr="is_android">
+-    <picture slot="product-logo">
+-      <source media="(prefers-color-scheme: dark)"
+-          srcset="//resources/images/chrome_logo_dark.svg">
+-      <img srcset="images/product_logo.png" role="presentation">
+-    </picture>
+-  </if>
++  <!-- mobile-bex: Chromium のロゴは出さない。このブラウザは Chromium ではないので
++       名乗りとして誤りだし、拡張機能ページの見出しに製品ロゴは要らない。 -->
+ </cr-toolbar>
+ ${this.showPackDialog_ ? html`
+   <extensions-pack-dialog .delegate="${this.delegate}"

@@ -1,0 +1,287 @@
+# Patch 34: GitHub のリリースを見て更新を知らせる
+# Play ストアではなく GitHub のリリースから配布している (サイドロード) ため、
+# 上流の Omaha による更新確認は動かない。かといって APK を自分でダウンロードして
+# インストールする方式は REQUEST_INSTALL_PACKAGES 権限が要り、「他のアプリを
+# 入れられる」強い権限をブラウザに持たせたくない (docs/updates.md 参照)。
+#
+# そこで「新しい版が出ていることを知らせる」ところまでを実装する。BexUpdateChecker が
+# GitHub API から最新リリースを取り、Omaha が使うのと同じ SharedPreferences に
+# 書き込む。以降の判定 (VersionNumberGetter) と、三点メニューの「更新」項目や
+# ツールバーのバッジといった UI は上流のものがそのまま動く。押すとリリースページが開く。
+#
+# 併せて2箇所直さないと動かない:
+#   - VersionNumber は Chromium 由来の 4 桁 (a.b.c.d) しか受け付けず、このブラウザの
+#     0.1.2 のような 3 桁は必ず null になっていた。1〜4 桁を許して 0 埋めする
+#   - UpdateStatusProvider が「Play ストアが入っていること」を更新の条件にしていた。
+#     サイドロード配布では関係ないので外す
+#
+# 確認は1日1回に抑える (GitHub API は未認証で 60 req/hour/IP)。通信に失敗しても
+# 時刻は進め、繋がらないたびに起動のたび叩きに行かないようにしている。
+# 通信は ChromiumNetworkAdapter 経由で行う (URL#openConnection の直接使用は
+# Chromium では禁止されており、ネットワークトラフィック注釈が必要)。
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
+index 4806572..cdc68d8 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
+@@ -120,6 +120,7 @@ import org.chromium.chrome.browser.multiwindow.MultiInstanceManager;
+ import org.chromium.chrome.browser.multiwindow.MultiWindowUtils;
+ import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils;
+ import org.chromium.chrome.browser.ntp_customization.edge_to_edge.TopInsetCoordinator;
++import org.chromium.chrome.browser.omaha.BexUpdateChecker;
+ import org.chromium.chrome.browser.omnibox.OmniboxActionDelegateImpl;
+ import org.chromium.chrome.browser.omnibox.OmniboxChipManager;
+ import org.chromium.chrome.browser.omnibox.geo.GeolocationHeader;
+@@ -1354,6 +1355,10 @@ public class RootUiCoordinator
+         // 初回のみデスクトップ表示を既定にする。
+         DesktopSiteUtils.maybeDefaultEnableWebStoreDesktopSite(originalProfile);
+ 
++        // mobile-bex: GitHub のリリースを見て新しい版が出ていないか調べる (1日1回)。
++        // 結果は Omaha と同じ保存先に書かれ、三点メニューの「更新」項目に反映される。
++        BexUpdateChecker.maybeCheck();
++
+         initMerchantTrustSignals(originalProfile);
+     }
+ 
+diff --git a/chrome/browser/omaha/android/BUILD.gn b/chrome/browser/omaha/android/BUILD.gn
+index 16a1f58..c528a54 100644
+--- a/chrome/browser/omaha/android/BUILD.gn
++++ b/chrome/browser/omaha/android/BUILD.gn
+@@ -6,6 +6,7 @@ import("//build/config/android/rules.gni")
+ 
+ android_library("java") {
+   sources = [
++    "java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java",
+     "java/src/org/chromium/chrome/browser/omaha/ExponentialBackoffScheduler.java",
+     "java/src/org/chromium/chrome/browser/omaha/MarketURLGetter.java",
+     "java/src/org/chromium/chrome/browser/omaha/OmahaPrefUtils.java",
+@@ -24,6 +25,7 @@ android_library("java") {
+     "$google_play_services_package:google_play_services_base_java",
+     "//base:base_java",
+     "//base:base_shared_preferences_java",
++    "//net/android:net_java",
+     "//base/version_info/android:version_constants_java",
+     "//chrome/browser/flags:java",
+     "//chrome/browser/preferences:java",
+diff --git a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java
+new file mode 100644
+index 0000000..4dd359c
+--- /dev/null
++++ b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java
+@@ -0,0 +1,158 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.omaha;
++
++import android.content.SharedPreferences;
++import android.text.format.DateUtils;
++
++import org.json.JSONObject;
++
++import org.chromium.base.Log;
++import org.chromium.base.StreamUtil;
++import org.chromium.base.task.PostTask;
++import org.chromium.base.task.TaskTraits;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.net.ChromiumNetworkAdapter;
++import org.chromium.net.NetworkTrafficAnnotationTag;
++
++import java.io.BufferedReader;
++import java.io.InputStreamReader;
++import java.net.HttpURLConnection;
++import java.net.URL;
++import java.nio.charset.StandardCharsets;
++
++/**
++ * mobile-bex: GitHub のリリースを見て、新しい版が出ていないか調べる。
++ *
++ * <p>このブラウザは Play ストアではなく GitHub のリリースから配布する (サイドロード) ため、
++ * 上流の Omaha による更新確認は動かない。代わりにここで最新版を取得し、Omaha が使うのと
++ * 同じ場所 ({@link OmahaPrefUtils} の SharedPreferences) に書き込む。こうすると
++ * {@link VersionNumberGetter#isNewerVersionAvailable} 以降の判定と、三点メニューの
++ * 「更新」項目やツールバーのバッジといった既存の UI がそのまま使える。
++ *
++ * <p>APK を自分でダウンロードしてインストールする方式は採らない。それには
++ * REQUEST_INSTALL_PACKAGES 権限が要るが、これは「他のアプリを入れられる」強い権限で、
++ * ブラウザに持たせたくない。「更新」を押したらリリースページを開くところまでにする
++ * (docs/updates.md 参照)。
++ */
++@NullMarked
++public class BexUpdateChecker {
++    private static final String TAG = "BexUpdate";
++
++    private static final String LATEST_RELEASE_API =
++            "https://api.github.com/repos/kuronekorou39/mobile-bex/releases/latest";
++    private static final String RELEASES_PAGE =
++            "https://github.com/kuronekorou39/mobile-bex/releases/latest";
++
++    /** 最後に確認した時刻。GitHub API は未認証だと 60 req/hour/IP なので1日1回に抑える。 */
++    private static final String PREF_LAST_CHECK_MS = "bexLastUpdateCheckMs";
++
++    private static final long CHECK_INTERVAL_MS = DateUtils.DAY_IN_MILLIS;
++    private static final int TIMEOUT_MS = 10000;
++
++    private static final NetworkTrafficAnnotationTag TRAFFIC_ANNOTATION =
++            NetworkTrafficAnnotationTag.createComplete(
++                    "bex_github_update_check",
++                    """
++                    semantics {
++                      sender: "BEX Update Checker"
++                      description:
++                        "This browser is distributed as an APK on GitHub rather than through an "
++                        "app store, so it cannot be updated automatically. Once a day it asks the "
++                        "GitHub API for the latest published release and compares the version with "
++                        "the running one, so that the app menu can tell the user that a newer "
++                        "version exists."
++                      trigger: "Browser startup, at most once every 24 hours."
++                      data: "No user data. Only an unauthenticated GET for the release metadata."
++                      destination: WEBSITE
++                      internal {
++                        contacts {
++                          email: "kuronekorou39@gmail.com"
++                        }
++                      }
++                      user_data {
++                        type: NONE
++                      }
++                      last_reviewed: "2026-08-07"
++                    }
++                    policy {
++                      cookies_allowed: NO
++                      setting: "This feature can not be disabled."
++                      policy_exception_justification: "Not implemented."
++                    }
++                    """);
++
++    private BexUpdateChecker() {}
++
++    /** 前回の確認から十分たっていれば、バックグラウンドで最新版を調べる。 */
++    public static void maybeCheck() {
++        PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, BexUpdateChecker::checkIfDue);
++    }
++
++    private static void checkIfDue() {
++        SharedPreferences prefs = OmahaPrefUtils.getSharedPreferences();
++        long now = System.currentTimeMillis();
++        long last = prefs.getLong(PREF_LAST_CHECK_MS, 0);
++
++        // 端末の時計が巻き戻された場合 (now < last) も確認しに行く。
++        if (last != 0 && now >= last && now - last < CHECK_INTERVAL_MS) return;
++
++        // 通信に失敗しても時刻は進めておく。繋がらないたびに起動のたび叩きに行くより、
++        // 1日待って諦める方がよい。
++        prefs.edit().putLong(PREF_LAST_CHECK_MS, now).apply();
++
++        String version = fetchLatestVersion();
++        if (version == null) return;
++
++        prefs.edit()
++                .putString(OmahaPrefUtils.PREF_LATEST_VERSION, version)
++                .putString(OmahaPrefUtils.PREF_MARKET_URL, RELEASES_PAGE)
++                .apply();
++        Log.i(TAG, "Latest release on GitHub: %s", version);
++    }
++
++    /**
++     * @return リリースの版数 (タグの先頭の "v" を除いたもの)。取れなければ null。
++     */
++    private static @org.chromium.build.annotations.Nullable String fetchLatestVersion() {
++        HttpURLConnection connection = null;
++        BufferedReader reader = null;
++        try {
++            connection =
++                    (HttpURLConnection)
++                            ChromiumNetworkAdapter.openConnection(
++                                    new URL(LATEST_RELEASE_API), TRAFFIC_ANNOTATION);
++            connection.setConnectTimeout(TIMEOUT_MS);
++            connection.setReadTimeout(TIMEOUT_MS);
++            connection.setRequestProperty("Accept", "application/vnd.github+json");
++
++            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
++                Log.w(TAG, "Update check failed: HTTP %d", connection.getResponseCode());
++                return null;
++            }
++
++            reader =
++                    new BufferedReader(
++                            new InputStreamReader(
++                                    connection.getInputStream(), StandardCharsets.UTF_8));
++            StringBuilder body = new StringBuilder();
++            String line;
++            while ((line = reader.readLine()) != null) {
++                body.append(line);
++            }
++
++            String tag = new JSONObject(body.toString()).optString("tag_name");
++            if (tag.isEmpty()) return null;
++            return tag.startsWith("v") ? tag.substring(1) : tag;
++        } catch (Exception e) {
++            // 通信もパースも失敗しうる。更新確認が失敗してもブラウザの動作には影響しない。
++            Log.w(TAG, "Update check failed", e);
++            return null;
++        } finally {
++            StreamUtil.closeQuietly(reader);
++            if (connection != null) connection.disconnect();
++        }
++    }
++}
+diff --git a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java
+index 6a534e6..e1a8195 100644
+--- a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java
++++ b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java
+@@ -16,13 +16,11 @@ import android.text.TextUtils;
+ 
+ import androidx.annotation.IntDef;
+ 
+-import com.google.android.gms.common.GooglePlayServicesUtil;
+ 
+ import org.chromium.base.ApkInfo;
+ import org.chromium.base.Callback;
+ import org.chromium.base.DeviceInfo;
+ import org.chromium.base.ObserverList;
+-import org.chromium.base.PackageUtils;
+ import org.chromium.base.ThreadUtils;
+ import org.chromium.base.task.AsyncTask;
+ import org.chromium.base.task.AsyncTask.Status;
+@@ -294,12 +292,13 @@ public class UpdateStatusProvider {
+                 status.updateUrl = MarketURLGetter.getMarketUrl();
+                 status.latestVersion = VersionNumberGetter.getInstance().getLatestKnownVersion();
+ 
++                // mobile-bex: Play ストアがあることを条件にしない。このブラウザは
++                // GitHub のリリースから配布しているので、Play ストアの有無は関係ない。
++                // 更新先の URL も BexUpdateChecker がリリースページに差し替えている。
+                 boolean allowedToUpdate =
+                         checkForSufficientStorage()
+                                 // Disable the version update check for automotive. See b/297925838.
+-                                && !DeviceInfo.isAutomotive()
+-                                && PackageUtils.isPackageInstalled(
+-                                        GooglePlayServicesUtil.GOOGLE_PLAY_STORE_PACKAGE);
++                                && !DeviceInfo.isAutomotive();
+                 status.updateState =
+                         allowedToUpdate ? UpdateState.UPDATE_AVAILABLE : UpdateState.NONE;
+ 
+diff --git a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/VersionNumber.java b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/VersionNumber.java
+index a3c9932..0097415 100644
+--- a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/VersionNumber.java
++++ b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/VersionNumber.java
+@@ -26,13 +26,17 @@ public class VersionNumber {
+ 
+         // Parse out the version numbers.
+         String[] pieces = str.split("\\.");
+-        if (pieces.length != 4) {
++        // mobile-bex: 上流は Chromium 由来の 4 桁 (a.b.c.d) しか受け付けないが、この
++        // ブラウザの版数は 0.1.2 のような 3 桁なので、1〜4 桁を許して足りない分は 0 で
++        // 埋める。そうしないと VersionNumberGetter.isNewerVersionAvailable() が常に
++        // false になり、更新の確認ができない。
++        if (pieces.length < 1 || pieces.length > 4) {
+             return null;
+         }
+ 
+         VersionNumber version = new VersionNumber();
+         try {
+-            for (int i = 0; i < 4; ++i) {
++            for (int i = 0; i < pieces.length; ++i) {
+                 version.mVersion[i] = Integer.parseInt(pieces[i]);
+             }
+         } catch (NumberFormatException e) {

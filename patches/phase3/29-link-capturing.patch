@@ -1,0 +1,152 @@
+# Patch 29: リンクを踏んでも勝手にアプリへ飛ばないようにする
+# 対応するアプリが入っているリンク (twitch.tv に対する Twitch アプリ等) を踏むと、
+# ブラウザ内で開かずにそのアプリが起動してしまい、ブラウザとして使えなかった。
+#
+# 上流に同じ問題のための DesktopAndroidLinkCapturing があり、実装は揃っているのに
+# 既定で無効なだけだったので、有効にする。有効にすると http/https はブラウザ内で
+# 開き (ExternalNavigationHandler#maybeSetAppForCurrentPage)、そのページを扱える
+# アプリは三点メニューの「アプリで開く」にアプリ名とアイコン付きで出る。
+# mailto: や tel: は http/https 判定の外なので、これまでどおりアプリに渡る。
+#
+# CachedFlag は前回起動時にキャッシュした値を使うため、Java 側の既定値も
+# 合わせて変える。片方だけだと初回起動でリンクがアプリに奪われる。
+#
+# フラグを立てるだけでは効かない。上流は DeviceInfo.isDesktop() も条件にしており、
+# あれは android.hardware.type.pc を持つ端末 (ChromeOS 等) でないと true にならない。
+# Pixel 9a では false のままで、フラグを有効にしても何も変わらなかった。
+# isDesktop() 自体を変えると UI 全体がデスクトップ扱いになって影響が広いので、
+# OpenInAppUtils の判定からだけ端末条件を外す。
+#
+# この機能は omnibox の上にも「アプリで開く」チップを出すが、URL バーに被さって
+# 常に見えているのが邪魔なので、チップは出さないことにした。止めるのは表示側
+# (TabbedOpenInAppEntryPoint) にする。RootUiCoordinator で OmniboxChipManager を
+# 作らないようにしたら、受け取る側が非 null 前提のフィールドとして持っていたため、
+# タブを切り替えるたびに NPE でブラウザが落ちた。
+# 上流はチップを出している間だけメニュー項目を隠す作りなので、チップを出さなければ
+# 「アプリで開く」は常に三点メニューから使える。
+diff --git a/chrome/browser/flags/android/chrome_feature_list.cc b/chrome/browser/flags/android/chrome_feature_list.cc
+index fcff134..6ef4c77 100644
+--- a/chrome/browser/flags/android/chrome_feature_list.cc
++++ b/chrome/browser/flags/android/chrome_feature_list.cc
+@@ -646,7 +646,11 @@ BASE_FEATURE(kCrossDeviceTabPaneAndroid, base::FEATURE_DISABLED_BY_DEFAULT);
+ BASE_FEATURE(kDefaultBrowserPromoAndroid2, base::FEATURE_DISABLED_BY_DEFAULT);
+ BASE_FEATURE(kDefaultBrowserPromoEntryPoint, base::FEATURE_DISABLED_BY_DEFAULT);
+ BASE_FEATURE(kDefaultBrowserPromoFre, base::FEATURE_DISABLED_BY_DEFAULT);
+-BASE_FEATURE(kDesktopAndroidLinkCapturing, base::FEATURE_DISABLED_BY_DEFAULT);
++// mobile-bex: 既定で有効にする。無効だと、対応するアプリが入っているリンク
++// (twitch.tv に対する Twitch アプリ等) を踏むたびにそのアプリへ飛ばされてしまい、
++// ブラウザとして使えない。有効にすると、リンクはブラウザ内で開いたうえで、
++// そのページを扱えるアプリが三点メニューの「アプリで開く」に出るようになる。
++BASE_FEATURE(kDesktopAndroidLinkCapturing, base::FEATURE_ENABLED_BY_DEFAULT);
+ BASE_FEATURE(kDesktopUAOnConnectedDisplay, base::FEATURE_DISABLED_BY_DEFAULT);
+ // The feature is a no-op, it replaces android.hardware.biometrics library on
+ // Android with androidx.biometric.
+diff --git a/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java b/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java
+index bc9a473..216437c 100644
+--- a/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java
++++ b/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java
+@@ -874,8 +874,11 @@ public abstract class ChromeFeatureList {
+                     /* defaultValueInTests= */ true);
+     public static final CachedFlag sDefaultBrowserPromoFre =
+             newCachedFlag(DEFAULT_BROWSER_PROMO_FRE, false);
++    // mobile-bex: 既定値も native 側 (chrome_feature_list.cc) に合わせて有効にする。
++    // CachedFlag は前回起動時にキャッシュした値を使うため、初回起動でもリンクが
++    // アプリに奪われないよう、ここも true にしておく必要がある。
+     public static final CachedFlag sDesktopAndroidLinkCapturing =
+-            newCachedFlag(DESKTOP_ANDROID_LINK_CAPTURING, false);
++            newCachedFlag(DESKTOP_ANDROID_LINK_CAPTURING, true);
+     public static final CachedFlag sDesktopUAOnConnectedDisplay =
+             newCachedFlag(
+                     DESKTOP_UA_ON_CONNECTED_DISPLAY,
+diff --git a/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/OpenInAppUtils.java b/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/OpenInAppUtils.java
+index 7bffc96..c3c65d6 100644
+--- a/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/OpenInAppUtils.java
++++ b/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/OpenInAppUtils.java
+@@ -4,7 +4,6 @@
+ 
+ package org.chromium.chrome.browser.open_in_app;
+ 
+-import org.chromium.base.DeviceInfo;
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.chrome.browser.flags.ChromeFeatureList;
+ 
+@@ -14,7 +13,11 @@ public class OpenInAppUtils {
+ 
+     /** Returns whether Open in App is available. */
+     public static boolean isOpenInAppAvailable() {
+-        return ChromeFeatureList.sDesktopAndroidLinkCapturing.isEnabled() && DeviceInfo.isDesktop();
++        // mobile-bex: 上流は DeviceInfo.isDesktop() も条件にしているが、あれは
++        // android.hardware.type.pc を持つ端末 (ChromeOS 等) でないと true にならず、
++        // 普通のスマホでは常に無効になってしまう。このブラウザはスマホで使うものなので
++        // 端末の条件は外し、フラグだけで判定する。
++        return ChromeFeatureList.sDesktopAndroidLinkCapturing.isEnabled();
+     }
+ 
+     private OpenInAppUtils() {}
+diff --git a/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/TabbedOpenInAppEntryPoint.java b/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/TabbedOpenInAppEntryPoint.java
+index de62683..00e5fff 100644
+--- a/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/TabbedOpenInAppEntryPoint.java
++++ b/chrome/browser/open_in_app/android/java/src/org/chromium/chrome/browser/open_in_app/TabbedOpenInAppEntryPoint.java
+@@ -4,10 +4,7 @@
+ 
+ package org.chromium.chrome.browser.open_in_app;
+ 
+-import static org.chromium.build.NullUtil.assertNonNull;
+-
+ import android.content.Context;
+-import android.graphics.drawable.Drawable;
+ 
+ import org.chromium.base.supplier.NullableObservableSupplier;
+ import org.chromium.build.annotations.NullMarked;
+@@ -19,7 +16,6 @@ import org.chromium.chrome.browser.tab.Tab;
+ @NullMarked
+ public class TabbedOpenInAppEntryPoint extends OpenInAppEntryPoint {
+     private final OmniboxChipManager mOmniboxChipManager;
+-    private boolean mShowingChip;
+ 
+     /**
+      * Constructor for this class.
+@@ -41,38 +37,12 @@ public class TabbedOpenInAppEntryPoint extends OpenInAppEntryPoint {
+     public void onOpenInAppInfoChanged(OpenInAppDelegate.@Nullable OpenInAppInfo openInAppInfo) {
+         super.onOpenInAppInfoChanged(openInAppInfo);
+ 
+-        if (openInAppInfo == null && mOmniboxChipManager.isChipShown()) {
++        // mobile-bex: omnibox のチップは出さない。URL バーに被さって常に見えているのが
++        // 邪魔なため。上流はチップを出している間だけメニュー項目を隠す作りなので
++        // (getOpenInAppInfoForMenuItem のオーバーライド)、チップを出さないことにすれば
++        // 「アプリで開く」は常に三点メニューから使える。
++        if (mOmniboxChipManager.isChipShown()) {
+             mOmniboxChipManager.dismissChip();
+-        } else if (openInAppInfo != null) {
+-            Drawable icon = openInAppInfo.appIcon;
+-            if (icon == null) {
+-                icon = assertNonNull(mContext.getDrawable(R.drawable.ic_open_in_new_20dp));
+-            }
+-
+-            mOmniboxChipManager.showChip(
+-                    mContext.getString(R.string.open_in_app),
+-                    icon,
+-                    // TODO(crbug.com/450253146): Add a real content description.
+-                    mContext.getString(R.string.open_in_app),
+-                    openInAppInfo.action,
+-                    new OmniboxChipManager.ChipCallback() {
+-                        @Override
+-                        public void onChipHidden() {
+-                            mShowingChip = false;
+-                        }
+-
+-                        @Override
+-                        public void onChipShown() {
+-                            mShowingChip = true;
+-                        }
+-                    });
+         }
+     }
+-
+-    @Override
+-    public OpenInAppDelegate.@Nullable OpenInAppInfo getOpenInAppInfoForMenuItem() {
+-        if (mShowingChip) return null;
+-
+-        return super.getOpenInAppInfoForMenuItem();
+-    }
+ }

@@ -5,10 +5,18 @@
 # 併せて、選んでも何も起きないサインイン導線を隠す:
 #   - 初回起動 (FRE) のウェルカム/サインイン画面を出さずログアウト状態で始める
 #   - ツールバーのアカウントアイコン (IdentityDisc) を表示しない
-#   - 新しいタブの「Chrome にログイン」カード (SignInPromo) を出さない。
-#     閉じても次のタブでまた出てくるため、そもそも作らないことにした。
-#     使われなくなる getSuppressionStatus() も消す (errorprone の UnusedMethod
-#     が警告を出し、警告はエラー扱いなのでビルドが通らない)
+#   - 新しいタブの「Chrome にログイン」カードを出さない。閉じても次のタブでまた
+#     出てくるため、そもそも作らないことにした
+#
+# ログインカードは NtpSigninPromoDelegate.canShowPromo() で止める。ここが表示経路の
+# 合流点だから。プロモには Feed 経路 (FeedSurfaceMediator → SignInPromo) と NTP 経路
+# (NewTabPageLayout → NtpSigninPromoCoordinator) があり kEnableSeamlessSignin で
+# 排他になっている。あのフラグはコード上 FEATURE_DISABLED_BY_DEFAULT なので Feed 経路
+# だけ塞いだが、それでは消えなかった。fieldtrial_testing_config.json の
+# SeamlessSigninClank が有効化するため、公式ビルドでない限り実際に動くのは NTP 経路。
+# (SignInPromo 側の変更も残してあるが、上記の理由で通常は到達しない。使われなくなる
+#  getSuppressionStatus() も消している。errorprone の UnusedMethod が警告を出し、
+#  警告はエラー扱いなのでビルドが通らないため)
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
 index 97fd673..a90e2fc 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
@@ -85,6 +93,28 @@ index c8ba78d..9385ac5 100644
          return false;
      }
  
+diff --git a/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java b/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java
+index 5cf038f..b5293dd 100644
+--- a/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java
++++ b/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java
+@@ -171,7 +171,16 @@ public class NtpSigninPromoDelegate extends SigninPromoDelegate {
+ 
+     @Override
+     boolean canShowPromo() {
+-        return mPromoState != PromoState.NONE;
++        // mobile-bex: 新しいタブの「Chrome にログイン」カードは出さない。このビルドは
++        // 端末にアカウントを追加できないため、ログインを勧めても何も起きない (Patch 21)。
++        //
++        // ここで止めるのは、このデリゲートが表示経路の合流点だから。プロモには Feed 経路
++        // (FeedSurfaceMediator) と NTP 経路 (NewTabPageLayout → NtpSigninPromoCoordinator)
++        // があり、kEnableSeamlessSignin で排他になっている。あのフラグはコード上
++        // FEATURE_DISABLED_BY_DEFAULT だが、fieldtrial_testing_config.json の
++        // SeamlessSigninClank が有効化するため、公式ビルドでない限り実際には有効。
++        // つまり動いているのは NTP 経路のほうで、Feed 経路だけ塞いでも意味がない。
++        return false;
+     }
+ 
+     @Override
 diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 index fcf64ef..a30dd1a 100644
 --- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java

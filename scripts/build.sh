@@ -213,7 +213,11 @@ run_build() {
     if ! diff -q "$expected_args" "$args_file" > /dev/null 2>&1; then
       echo "ERROR: $OUT_DIR/args.gn が build.sh の生成内容と一致しません。"
       echo "       差分 (左: 期待値 / 右: 現在):"
-      diff "$expected_args" "$args_file" | sed 's/^/         /' || true
+      # 署名鍵のパスワードは伏せる。差分にそのまま出すと、ビルドログを貼っただけで
+      # 漏れる（実際に一度出してしまった）。
+      diff "$expected_args" "$args_file" \
+        | sed 's/^\(. *android_keystore_password = \).*/\1"***"/' \
+        | sed 's/^/         /' || true
       echo ""
       echo "       次を実行して設定を反映してください（全体の再ビルドになります）:"
       echo "         ./scripts/build.sh --setup"

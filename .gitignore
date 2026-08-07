@@ -12,3 +12,9 @@ bex-screen*.png
 bex-test-*.zip
 __pycache__/
 .work/
+
+# 動作確認用に撮った画面のキャプチャ・録画。端末の画面がそのまま写るので
+# 公開リポジトリには入れない
+*.mp4
+image*.png
+screen-*.png

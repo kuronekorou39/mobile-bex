@@ -104,12 +104,12 @@ is_chrome_branded = false
 
 拡張機能の有効化は `is_desktop_android = true` だけで行う。これが
 `enable_desktop_android_extensions` → `enable_extensions_core = true` という
-Android 対応版の拡張機能構成に伝播する（`docs/phase1-results.md` 参照）。
+Android 対応版の拡張機能構成に伝播する（`docs/history/phase1-results.md` 参照）。
 
 `enable_extensions = true` を直接書くと、Android では app_shell
 (`//extensions/shell` → `//apps`) を引き込み、50以上の BUILD.gn にある
 `assert(!is_android)` に引っかかって `gn gen` 自体が失敗する
-（`docs/patch-research.md` 参照）。この注意は `scripts/build.sh` の `generate_args`
+（`docs/history/patch-research.md` 参照）。この注意は `scripts/build.sh` の `generate_args`
 内にもコメントとして残してある。
 
 ### proprietary_codecs が必要な理由

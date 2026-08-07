@@ -17,7 +17,7 @@ patches/
 `is_desktop_android = true` を指定するだけで拡張機能の基盤（chrome://extensions、
 Content Script 注入、権限UI、主要API）が動作することが判明した**。
 そのため phase1/ と phase2/ にパッチは存在しない。
-経緯は `docs/phase1-results.md` / `docs/phase2-results.md` を参照。
+経緯は `docs/history/phase1-results.md` / `docs/history/phase2-results.md` を参照。
 
 ## Phase 3 パッチ一覧 (UX最適化)
 

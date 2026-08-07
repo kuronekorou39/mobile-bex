@@ -44,4 +44,4 @@
 
 **Phase 3 終了時点の状況**: 1 は Phase 3 の Patch 1〜4, 9, 13 で対応済み。
 **2〜4 は Phase 3 でも検証されておらず、未確認のまま持ち越している**
-（`docs/phase3-ui-styles.md` の「次のステップ」参照）。
+（`docs/history/phase3-ui-styles.md` の「次のステップ」参照）。

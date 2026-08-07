@@ -326,7 +326,7 @@ Android の omnibox はデスクトップの `ChromeOmniboxClient::ProcessExtens
 **注意点:**
 - 早期 return する分岐では、通常経路が末尾で呼ぶ `mHandler.post(this::finishInteraction)` を
   自前で呼ぶ必要がある。これを忘れるとサジェスト一覧が閉じず、遷移後のページを覆ってしまう
-  （実機で確認された症状。修正は適用済み・リビルド検証待ち。詳細は `docs/phase3-ui-styles.md` の #10 参照）
+  （実機で確認された症状。修正は適用済み・リビルド検証待ち。詳細は `docs/history/phase3-ui-styles.md` の #10 参照）
 - コミット済みのパッチファイルにはこの `finishInteraction` の1行がまだ入っていない
 
 ### Patch 15: `15-extensions-webui-mobile.patch`

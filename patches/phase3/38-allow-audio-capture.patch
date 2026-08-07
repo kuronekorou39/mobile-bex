@@ -1,0 +1,29 @@
+# Patch 38: 画面録画に音が入るようにする
+# 上流のマニフェストは android:allowAudioPlaybackCapture="false" を明示している。
+# Android 10 以降、この宣言があるアプリの音は、OS の画面録画を含む他のアプリから
+# 拾えない。そのため BEX の画面を録ると、映像は録れるのに音だけ入らない。
+#
+# 配信を並べて見る使い方をするブラウザなので、録画できることを優先して true に
+# した。ブラウザ一般としては false が妥当な既定で、Chrome もそうしている。
+#
+# 副作用: 音声キャプチャを行うアプリ全般から、BEX で再生している音が録れる状態に
+# なる。画面録画アプリに限らない。この判断は利用者に伝わるようにしておくこと
+# (README とリリースノートに記載)。
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
+index 3e672c0..542837c 100644
+--- a/chrome/android/java/AndroidManifest.xml
++++ b/chrome/android/java/AndroidManifest.xml
+@@ -229,7 +229,12 @@ by a child template that "extends" this file.
+         android:allowBackup="false"
+         {% endif %}
+         android:networkSecurityConfig="@xml/network_security_config"
+-        android:allowAudioPlaybackCapture="false"
++        {# mobile-bex: 画面録画に音が入るようにする。上流は false で、これだと
++           OS の画面録画を含む他アプリがこのアプリの音を拾えず、映像だけ録れて
++           音が無い状態になる。配信を並べて見る使い方をするブラウザなので、
++           録画できることを優先した。副作用として、音声キャプチャを行うアプリ
++           全般から BEX の音が録れる状態になる。 #}
++        android:allowAudioPlaybackCapture="true"
+         android:appComponentFactory="org.chromium.chrome.browser.base.SplitCompatAppComponentFactory"
+         android:enableOnBackInvokedCallback="true"
+         {% if javaless_renderers is defined %}

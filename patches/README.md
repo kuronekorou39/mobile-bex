@@ -61,6 +61,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 35 | `35-extension-shortcuts.patch` | 拡張機能をホーム画面のショートカットにする |
 | 36 | `36-incognito-extensions.patch` | シークレットモードで拡張機能を動くようにする（落ちる／「現在のウィンドウなし」を解消） |
 | 37 | `37-extensions-detail-width.patch` | chrome://extensions の詳細ページが横に見切れるのを直す |
+| 38 | `38-allow-audio-capture.patch` | 画面録画に音が入るようにする（`allowAudioPlaybackCapture`） |
 
 ### 欠番について
 

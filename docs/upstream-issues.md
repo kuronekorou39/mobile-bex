@@ -82,3 +82,33 @@ URI を返す。これは親ディレクトリのパスを前方一致で含ま�
 
 **回避**: 表示領域のサイズは変更せず、ポップアップ側にシート全体を埋める
 サイズでレイアウトさせることで、背景が露出しないようにした（Patch 25）。
+
+## 5. 知らない拡張機能 ID を渡すとブラウザが落ちる
+
+**症状**: ホーム画面のショートカットから、既にアンインストールした拡張機能を
+起動しようとするとプロセスごと落ちる。
+
+```
+Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0
+  ExtensionsToolbarViewModel::ExecuteUserAction
+  Muxed_..._ExtensionsToolbarBridge_executeUserAction
+```
+
+**原因**: `ExtensionsToolbarViewModel::GetActionModelForId()` は知らない ID に
+対して `nullptr` を返す作りなのに、呼び出し側が素通しで参照していた。
+
+```cpp
+GetActionModelForId(action_id)->ExecuteUserAction(source);
+```
+
+同じ経路の `ExtensionsToolbarAndroid::GetAction()` も、Java 側が `@Nullable` と
+宣言しているのに `action->GetActionName()` を無条件で呼んでいた。つまり
+「この ID は知らない」を安全に問い合わせる手段が無い状態だった。
+
+上流では、ツールバーに並んでいるボタンを押す経路しか無く、ID は必ずモデルに
+存在する前提になっている。ID を外から持ち込む経路（ショートカット）を足した
+ことで表面化した。
+
+**対処**: 両方に null チェックを入れ、`GetAction()` は宣言どおり null を返す
+ようにした。併せて Java 側でも、ツールバーがまだ把握していない ID は
+`onActionsInitialized` まで実行を保留するようにした（Patch 35）。

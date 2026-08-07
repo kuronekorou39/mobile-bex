@@ -3,64 +3,205 @@
 # ホーム画面にドラッグして置けば、拡張機能を「アプリのように」直接起動できる。
 # 拡張機能ごとにアイコンとタイトルを持たせるので、置いたあとも見分けがつく。
 #
-# 実装は Android の動的ショートカット (ShortcutManager)。起動のたびに
-# BexExtensionShortcuts.updateSoon() で作り直し、インストールや削除に追随する。
-# 上限 (ランチャー依存、多くは4〜5個) を超える分は先頭から切る。
+# 実装は Android の動的ショートカット (ShortcutManager)。起動のたびに作り直し、
+# インストールや削除に追随する。setDynamicShortcuts は使えない。あれは動的
+# ショートカットの全置換で、ブラウザ自身が出している「シークレット タブ」まで
+# 消してしまう (実機の dumpsys で確認)。自分の ID 接頭辞が付いたものだけ触る。
 #
-# ショートカットから起動されたときは、intent に載せた拡張機能 ID を
-# maybeRunFromIntent() が拾って ExtensionsToolbarBridge.executeUserAction() に渡す。
-# ツールバーのアイコンを押したのと同じ経路なので、ポップアップも開く。
+# アイコンは getActionIcon() が非同期で読み込む。読み込み中は透明な画像が返る
+# ので、1回呼んで publish しただけでは全部空になる (実機で 171 バイトの PNG が
+# 登録されていた)。onActionIconUpdated を購読して、読み込みのたびに publish し
+# 直す。ホーム画面に置いた後のコピーは add/remove では変わらないため、
+# updateShortcuts でも更新する。
+#
+# 起動側は、ツールバーのボタンを押したのと同じ経路に載せる。executeUserAction は
+# 「ネイティブが、呼び出しに使った bridge の triggerPopup を呼び返す」作りなので、
+# 新しい bridge を作って呼ぶと delegate が無く、ポップアップが出せずに NPE になる。
+# そのため ExtensionToolbarCoordinator に runAction() を足して、ツールバーが
+# 持っている bridge を使う。既存の click() は使えない (RecyclerView にボタンが
+# 並んでいる必要があり、ピン留めしていない拡張機能では動かない)。
+#
+# 併せて上流の null 未チェックを2箇所直す。ID を外から持ち込む経路が無かったため
+# 表面化していなかったもので、削除済みの拡張機能のショートカットを踏むと
+# ブラウザごと落ちていた (docs/upstream-issues.md の 5 を参照)。
+#   - ExtensionsToolbarViewModel::ExecuteUserAction
+#   - ExtensionsToolbarAndroid::GetAction (Java 側は @Nullable と宣言していた)
+# 落ちなくすると今度は無反応になるので、消えた拡張機能のショートカットは
+# disableShortcuts() で理由付きで無効化する。入れ直せば復活する。
+#
+# 起動そのものがショートカット経由だった場合は RootUiCoordinator が起動時の
+# intent を見る。既に起動している BEX に届く分は getIntent() では取れないので、
+# ChromeTabbedActivity#onNewIntentWithNative からも渡す。一度実行したら extra を
+# 消す。消さないと画面回転で Activity が作り直されるたびに再実行されてしまう。
 #
 # intent は Intent#setPackage で自分宛てに限定してある。chrome-extension:// を
 # intent-filter で公開する方式は採らなかった。あれだと任意のアプリが拡張機能の
 # ページを開ける口になってしまう。
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+index d52d256..c9d385c 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -320,6 +320,7 @@ import org.chromium.chrome.browser.ui.default_browser_promo.DefaultBrowserPromoU
+ import org.chromium.chrome.browser.ui.desktop_windowing.AppHeaderUtils;
+ import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils;
+ import org.chromium.chrome.browser.ui.edge_to_edge.TransitiveTopInsetProvider;
++import org.chromium.chrome.browser.ui.extensions.BexExtensionShortcuts;
+ import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityClient;
+ import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityExtras.IntentOrigin;
+ import org.chromium.chrome.browser.ui.signin.BottomSheetSigninAndHistorySyncConfig;
+@@ -1788,6 +1789,13 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+                 maybeHandleUrlIntent(intent);
+             }
+ 
++            // mobile-bex: 既に起動している BEX にホーム画面のショートカットが届いた場合。
++            // 初回起動の分は RootUiCoordinator が起動時の intent を見て処理する。
++            BexExtensionShortcuts shortcuts = mRootUiCoordinator.getBexExtensionShortcuts();
++            if (shortcuts != null) {
++                shortcuts.handleIntent(intent);
++            }
++
+             if (IntentUtils.isMainIntentFromLauncher(intent)) {
+                 logMainIntentBehavior(intent);
+             }
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-index cdc68d8..114d67c 100644
+index cdc68d8..a9aaa10 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-@@ -121,6 +121,7 @@ import org.chromium.chrome.browser.multiwindow.MultiWindowUtils;
- import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils;
- import org.chromium.chrome.browser.ntp_customization.edge_to_edge.TopInsetCoordinator;
- import org.chromium.chrome.browser.omaha.BexUpdateChecker;
+@@ -167,6 +167,7 @@ import org.chromium.chrome.browser.theme.TopUiThemeColorProvider;
+ import org.chromium.chrome.browser.toolbar.ToolbarIntentMetadata;
+ import org.chromium.chrome.browser.toolbar.ToolbarManager;
+ import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarBehavior;
++import org.chromium.chrome.browser.toolbar.extensions.ExtensionToolbarCoordinator;
+ import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonCoordinator;
+ import org.chromium.chrome.browser.toolbar.top.ToolbarActionModeCallback;
+ import org.chromium.chrome.browser.toolbar.top.ToolbarControlContainer;
+@@ -190,6 +191,7 @@ import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils;
+ import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils.MissingNavbarInsetsReason;
+ import org.chromium.chrome.browser.ui.edge_to_edge.TopInsetProvider;
+ import org.chromium.chrome.browser.ui.edge_to_edge.TransitiveTopInsetProvider;
 +import org.chromium.chrome.browser.ui.extensions.BexExtensionShortcuts;
- import org.chromium.chrome.browser.omnibox.OmniboxActionDelegateImpl;
- import org.chromium.chrome.browser.omnibox.OmniboxChipManager;
- import org.chromium.chrome.browser.omnibox.geo.GeolocationHeader;
-@@ -1359,6 +1360,16 @@ public class RootUiCoordinator
+ import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
+ import org.chromium.chrome.browser.ui.native_page.NativePage;
+ import org.chromium.chrome.browser.ui.system.StatusBarColorController;
+@@ -289,6 +291,9 @@ public class RootUiCoordinator
+     protected final ActivityResultTracker mActivityResultTracker;
+     protected final OneshotSupplier<ChromeAndroidTask> mChromeAndroidTaskSupplier;
+ 
++    /** mobile-bex: 拡張機能をランチャーのショートカットとして出す。拡張機能が無効なら null。 */
++    private @Nullable BexExtensionShortcuts mBexExtensionShortcuts;
++
+     protected final ActivityTabProvider mActivityTabProvider;
+     protected MonotonicObservableSupplier<ShareDelegate> mShareDelegateSupplier;
+ 
+@@ -768,6 +773,31 @@ public class RootUiCoordinator
+         return mToolbarManager;
+     }
+ 
++    /**
++     * mobile-bex: ランチャーのショートカット。拡張機能が無効なビルドでは null。
++     *
++     * <p>起動後に届く intent を渡すために {@link
++     * org.chromium.chrome.browser.ChromeTabbedActivity} から使う。
++     */
++    public @Nullable BexExtensionShortcuts getBexExtensionShortcuts() {
++        return mBexExtensionShortcuts;
++    }
++
++    /**
++     * mobile-bex: ショートカットから頼まれた拡張機能を実行する。
++     *
++     * <p>ツールバーのボタンを押したのと同じ経路に載せる。ネイティブは executeUserAction の
++     * 答えとして、呼び出しに使った bridge の triggerPopup を呼び返す作りなので、
++     * ここで新しい bridge を作ってはいけない。ポップアップを出せるのは、ツールバーが
++     * 持っている bridge だけ。
++     */
++    private void runExtensionFromShortcut(String actionId) {
++        if (mToolbarManager == null) return;
++        ExtensionToolbarCoordinator coordinator = mToolbarManager.getExtensionToolbarCoordinator();
++        if (coordinator == null) return;
++        coordinator.runAction(actionId);
++    }
++
+     public StatusBarColorController getStatusBarColorController() {
+         return mStatusBarColorController;
+     }
+@@ -804,6 +834,12 @@ public class RootUiCoordinator
+         destroyUnownedUserDataSuppliers();
+         mActivityLifecycleDispatcher.unregister(this);
+ 
++        // mobile-bex: ランチャーのショートカット。ネイティブの bridge を持つので手放す。
++        if (mBexExtensionShortcuts != null) {
++            mBexExtensionShortcuts.destroy();
++            mBexExtensionShortcuts = null;
++        }
++
+         if (mExclusiveAccessManager != null) {
+             mExclusiveAccessManager.destroy();
+         }
+@@ -1359,6 +1395,20 @@ public class RootUiCoordinator
          // 結果は Omaha と同じ保存先に書かれ、三点メニューの「更新」項目に反映される。
          BexUpdateChecker.maybeCheck();
  
 +        // mobile-bex: 拡張機能をランチャーのショートカットとして出す。BEX のアイコンを
-+        // 長押しすると並び、ホーム画面に置ける。併せて、そのショートカットから起動された
-+        // 場合はここで拡張機能を実行する。この時点なら拡張機能の読み込みが済んでいる。
++        // 長押しすると並び、ホーム画面に置ける。
 +        ChromeAndroidTask task = mChromeAndroidTaskSupplier.get();
 +        if (task != null) {
-+            BexExtensionShortcuts.maybeRunFromIntent(
-+                    mActivity.getIntent(), task, originalProfile);
-+            BexExtensionShortcuts.updateSoon(mActivity, task, originalProfile);
++            mBexExtensionShortcuts =
++                    BexExtensionShortcuts.maybeCreate(
++                            mActivity, task, originalProfile, this::runExtensionFromShortcut);
++            // 起動そのものがショートカット経由だった場合。以降の intent は
++            // ChromeTabbedActivity#onNewIntentWithNative から渡される。
++            if (mBexExtensionShortcuts != null) {
++                mBexExtensionShortcuts.handleIntent(mActivity.getIntent());
++            }
 +        }
 +
          initMerchantTrustSignals(originalProfile);
      }
  
 diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/android/extensions/BUILD.gn
-index 1084616..4562c8d 100644
+index 1084616..6a880d1 100644
 --- a/chrome/browser/ui/android/extensions/BUILD.gn
 +++ b/chrome/browser/ui/android/extensions/BUILD.gn
-@@ -49,6 +49,7 @@ android_library("java") {
+@@ -9,6 +9,7 @@ import("//third_party/jni_zero/jni_zero.gni")
+ 
+ android_library("java") {
+   sources = [
++    "java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java",
+     "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUi.java",
+     "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUiBackend.java",
+   ]
+@@ -49,6 +50,7 @@ android_library("java") {
        "//components/thin_webview:java",
      ]
      sources += [
-+      "java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java",
++      "java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcutsImpl.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionAction.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionContextMenuBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
+diff --git a/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc b/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
+index f4af261..60a8735 100644
+--- a/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
++++ b/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
+@@ -152,6 +152,12 @@ base::android::ScopedJavaLocalRef<jobject> ExtensionsToolbarAndroid::GetAction(
+     const ToolbarActionsModel::ActionId& action_id) {
+   ToolbarActionViewModel* action =
+       toolbar_view_model_->GetActionModelForId(action_id);
++  // mobile-bex: the Java side declares this @Nullable, but nothing returned
++  // null: an unknown id crashed instead. Callers use null to mean "the toolbar
++  // does not know this action (yet)", so answer that.
++  if (!action) {
++    return base::android::ScopedJavaLocalRef<jobject>();
++  }
+   return Java_ExtensionAction_Constructor(
+       env, action_id, base::UTF16ToUTF8(action->GetActionName()));
+ }
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java
 new file mode 100644
-index 0000000..0283364
+index 0000000..e199478
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,73 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -68,114 +209,322 @@ index 0000000..0283364
 +package org.chromium.chrome.browser.ui.extensions;
 +
 +import android.app.Activity;
-+import android.content.Context;
++import android.content.Intent;
++
++import org.chromium.base.Callback;
++import org.chromium.base.ServiceLoaderUtil;
++import org.chromium.base.lifetime.Destroyable;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
++
++/**
++ * mobile-bex: Publishes the installed extensions as launcher shortcuts.
++ *
++ * <p>Long-pressing the BEX icon lists the extensions, and each of them can be dragged onto the home
++ * screen. Tapping one starts the browser and runs that extension, so an extension can be used much
++ * like an app.
++ *
++ * <p>This interface is always compiled, while the implementation is only compiled when the
++ * extension system is. Go through {@link #maybeCreate} rather than naming the implementation.
++ */
++@NullMarked
++public interface BexExtensionShortcuts extends Destroyable {
++    /**
++     * The extension to run, carried by the shortcut's intent.
++     *
++     * <p>Read by the browser process only. The intent is pinned by the launcher but is restricted
++     * to this package by {@link Intent#setPackage}, so it does not let other apps run extensions.
++     * Exposing chrome-extension:// through an intent-filter was considered and rejected: that would
++     * let any app open an extension's pages.
++     */
++    String EXTRA_EXTENSION_ID = "org.chromium.chrome.browser.ui.extensions.EXTENSION_ID";
++
++    /**
++     * Instantiates the implementation if it is available.
++     *
++     * @param runner Runs the extension with the given id. Called on the UI thread, and only once
++     *     the extension system has finished loading.
++     */
++    static @Nullable BexExtensionShortcuts maybeCreate(
++            Activity activity, ChromeAndroidTask task, Profile profile, Callback<String> runner) {
++        // Check that the extension UI is enabled first, as the toolbar does.
++        if (!ExtensionUi.isEnabled(profile)) {
++            return null;
++        }
++
++        BexExtensionShortcuts shortcuts =
++                ServiceLoaderUtil.maybeCreate(BexExtensionShortcuts.class);
++        if (shortcuts == null) {
++            return null;
++        }
++        shortcuts.initialize(activity, task, profile, runner);
++        return shortcuts;
++    }
++
++    /** Must be called exactly once, by {@link #maybeCreate}. */
++    void initialize(
++            Activity activity, ChromeAndroidTask task, Profile profile, Callback<String> runner);
++
++    /**
++     * Runs the extension named by the intent, if it names one.
++     *
++     * <p>Call this for both the launch intent and any later intent delivered to the running
++     * browser. The extension may be run asynchronously, once the extension system has loaded.
++     */
++    void handleIntent(@Nullable Intent intent);
++}
+diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcutsImpl.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcutsImpl.java
+new file mode 100644
+index 0000000..881e945
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcutsImpl.java
+@@ -0,0 +1,252 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import android.app.Activity;
 +import android.content.Intent;
 +import android.content.pm.ShortcutInfo;
 +import android.content.pm.ShortcutManager;
 +import android.graphics.Bitmap;
 +import android.graphics.drawable.Icon;
 +
++import org.chromium.base.Callback;
 +import org.chromium.base.Log;
 +import org.chromium.base.task.PostTask;
 +import org.chromium.base.task.TaskTraits;
++import org.chromium.build.annotations.Initializer;
 +import org.chromium.build.annotations.NullMarked;
 +import org.chromium.build.annotations.Nullable;
++import org.chromium.build.annotations.ServiceImpl;
 +import org.chromium.chrome.browser.profiles.Profile;
 +import org.chromium.chrome.browser.tab.Tab;
 +import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
-+import org.chromium.chrome.browser.ui.toolbar.InvocationSource;
 +
 +import java.util.ArrayList;
++import java.util.HashSet;
 +import java.util.List;
++import java.util.Set;
 +
-+/**
-+ * mobile-bex: インストール済みの拡張機能を、ランチャーのショートカットとして出す。
-+ *
-+ * <p>BEX のアイコンを長押しすると拡張機能が並び、そこからホーム画面に置ける。置いた
-+ * アイコンを押すと、ブラウザが立ち上がってその拡張機能が実行される。拡張機能を「アプリの
-+ * ように」使うための導線。
-+ *
-+ * <p>ショートカットの intent はランチャーに保存されるが、{@link Intent#setPackage} で
-+ * 自分宛てに限定してあり、外部のアプリから拡張機能を起動させる口にはならない。
-+ * chrome-extension:// を intent-filter で公開する方式は採らなかった。あれは任意のアプリが
-+ * 拡張機能のページを開けるようになってしまう。
-+ */
++/** The implementation of {@link BexExtensionShortcuts}. */
 +@NullMarked
-+public class BexExtensionShortcuts {
++@ServiceImpl(BexExtensionShortcuts.class)
++public class BexExtensionShortcutsImpl
++        implements BexExtensionShortcuts, ExtensionActionsBridge.Observer {
 +    private static final String TAG = "BexExtShortcuts";
-+
-+    /** ショートカットから起動されたときに、実行する拡張機能の ID を載せる。 */
-+    public static final String EXTRA_EXTENSION_ID =
-+            "org.chromium.chrome.browser.ui.extensions.EXTENSION_ID";
 +
 +    private static final String SHORTCUT_ID_PREFIX = "bex-extension-";
 +
-+    /** アイコンを取り出すときの一辺 (DIP)。ランチャーが縮小するので大きめに取る。 */
++    /**
++     * Side of the icon we ask for, in DIP.
++     *
++     * <p>Launchers draw shortcut icons at roughly the size of an app icon, so this is asking for
++     * more than the toolbar does. Extension icons are at most 128px, so there is no point going
++     * higher.
++     */
 +    private static final int ICON_SIZE_DP = 48;
 +
-+    private BexExtensionShortcuts() {}
++    private @Nullable Activity mActivity;
++    private @Nullable ExtensionActionsBridge mBridge;
++    private @Nullable Callback<String> mRunner;
 +
-+    /**
-+     * インストール済みの拡張機能でショートカットを作り直す。
-+     *
-+     * <p>動的ショートカットの上限はランチャーが決める (多くは4〜5個)。上限を超える分は
-+     * 黙って捨てられるので、こちらで先頭から上限までに絞る。
-+     */
-+    public static void update(Activity activity, ChromeAndroidTask task, Profile profile) {
++    /** The extension a shortcut asked for, held until the extension system has loaded. */
++    private @Nullable String mPendingActionId;
++
++    /** Set while an update is already posted, so a burst of icon updates publishes once. */
++    private boolean mUpdateScheduled;
++
++    private boolean mDestroyed;
++
++    public BexExtensionShortcutsImpl() {}
++
++    @Override
++    @Initializer
++    public void initialize(
++            Activity activity, ChromeAndroidTask task, Profile profile, Callback<String> runner) {
++        mActivity = activity;
++        mRunner = runner;
++        mBridge = new ExtensionActionsBridge(task, profile);
++        mBridge.addObserver(this);
++        scheduleUpdate();
++    }
++
++    @Override
++    public void destroy() {
++        mDestroyed = true;
++        if (mBridge != null) {
++            mBridge.removeObserver(this);
++            mBridge.destroy();
++            mBridge = null;
++        }
++        mActivity = null;
++        mRunner = null;
++    }
++
++    @Override
++    public void handleIntent(@Nullable Intent intent) {
++        if (intent == null) return;
++        String actionId = intent.getStringExtra(EXTRA_EXTENSION_ID);
++        if (actionId == null || actionId.isEmpty()) return;
++
++        // Consume it. Otherwise the extension would run again every time the activity is recreated
++        // from the same intent, e.g. on rotation.
++        intent.removeExtra(EXTRA_EXTENSION_ID);
++
++        mPendingActionId = actionId;
++        maybeRunPending();
++    }
++
++    // ExtensionActionsBridge.Observer
++
++    @Override
++    public void onActionModelInitialized() {
++        maybeRunPending();
++        scheduleUpdate();
++    }
++
++    @Override
++    public void onActionAdded(String actionId) {
++        scheduleUpdate();
++    }
++
++    @Override
++    public void onActionRemoved(String actionId) {
++        scheduleUpdate();
++    }
++
++    @Override
++    public void onActionUpdated(String actionId) {
++        scheduleUpdate();
++    }
++
++    @Override
++    public void onActionIconUpdated(String actionId) {
++        // Icons load asynchronously, so the first publish carries blank ones. This is what fills
++        // them in.
++        scheduleUpdate();
++    }
++
++    @Override
++    public void onPinnedActionsChanged() {
++        // Shortcuts list every extension, so pinning does not affect them.
++    }
++
++    private void maybeRunPending() {
++        if (mPendingActionId == null || mBridge == null || mRunner == null) return;
++        // Running an action needs the extension system loaded. If it is not yet, the pending id is
++        // kept and this runs again from onActionModelInitialized().
++        if (!mBridge.areActionsInitialized()) return;
++
++        String actionId = mPendingActionId;
++        mPendingActionId = null;
++        mRunner.onResult(actionId);
++    }
++
++    private void scheduleUpdate() {
++        if (mUpdateScheduled || mDestroyed) return;
++        mUpdateScheduled = true;
++        PostTask.postTask(
++                TaskTraits.UI_BEST_EFFORT,
++                () -> {
++                    mUpdateScheduled = false;
++                    update();
++                });
++    }
++
++    private void update() {
++        if (mDestroyed || mActivity == null || mBridge == null) return;
++        if (!mBridge.areActionsInitialized()) return;
++
++        Activity activity = mActivity;
 +        ShortcutManager manager = activity.getSystemService(ShortcutManager.class);
 +        if (manager == null) return;
 +
-+        ExtensionActionsBridge bridge = new ExtensionActionsBridge(task, profile);
 +        try {
-+            if (!bridge.areActionsInitialized()) {
-+                // まだ読み込めていない。次の起動で作られる。
-+                return;
++            // Build one shortcut per installed extension, then reconcile with what is published.
++            List<ShortcutInfo> shortcuts = buildShortcuts();
++            Set<String> live = new HashSet<>();
++            for (ShortcutInfo shortcut : shortcuts) {
++                live.add(shortcut.getId());
 +            }
-+            List<ShortcutInfo> shortcuts = buildShortcuts(activity, manager, bridge);
-+            manager.setDynamicShortcuts(shortcuts);
++
++            // A shortcut of ours whose extension is gone. The dynamic ones can just be dropped,
++            // but a copy the user dragged onto the home screen stays there forever unless we say
++            // something: it would open the browser and do nothing at all. Disabling it makes the
++            // launcher explain why instead.
++            List<String> gone = new ArrayList<>();
++            collectOursNotIn(manager.getDynamicShortcuts(), live, gone);
++            collectOursNotIn(manager.getPinnedShortcuts(), live, gone);
++
++            if (!gone.isEmpty()) {
++                manager.disableShortcuts(
++                        gone, activity.getString(R.string.bex_shortcut_extension_gone));
++                manager.removeDynamicShortcuts(gone);
++            }
++            // Ours are not the only shortcuts: the browser ships "New tab" as a manifest one and
++            // publishes "New Incognito tab" dynamically. So never call setDynamicShortcuts(),
++            // which would drop the latter; touch only what is ours.
++            manager.addDynamicShortcuts(shortcuts);
++            // Neither of the above touches copies already on the home screen. This is what
++            // refreshes those, and re-enables any whose extension was reinstalled.
++            manager.enableShortcuts(new ArrayList<>(live));
++            manager.updateShortcuts(shortcuts);
 +        } catch (IllegalStateException | IllegalArgumentException e) {
-+            // 端末やランチャーによっては拒否される。ショートカットが出ないだけで、
-+            // ブラウザの動作には影響しない。
++            // Some launchers refuse to publish. The shortcuts are then simply absent, which does
++            // not affect the browser itself.
 +            Log.w(TAG, "Could not publish extension shortcuts", e);
-+        } finally {
-+            bridge.destroy();
 +        }
 +    }
 +
-+    private static List<ShortcutInfo> buildShortcuts(
-+            Context context, ShortcutManager manager, ExtensionActionsBridge bridge) {
++    /** Adds the ids of our shortcuts in {@code published} that are missing from {@code live}. */
++    private static void collectOursNotIn(
++            List<ShortcutInfo> published, Set<String> live, List<String> out) {
++        for (ShortcutInfo shortcut : published) {
++            String id = shortcut.getId();
++            if (id.startsWith(SHORTCUT_ID_PREFIX) && !live.contains(id) && !out.contains(id)) {
++                out.add(id);
++            }
++        }
++    }
++
++    private List<ShortcutInfo> buildShortcuts() {
++        assert mActivity != null;
++        assert mBridge != null;
++
 +        List<ShortcutInfo> shortcuts = new ArrayList<>();
-+        int limit = manager.getMaxShortcutCountPerActivity();
++        float density = mActivity.getResources().getDisplayMetrics().density;
 +
-+        for (String actionId : bridge.getActionIds()) {
-+            if (shortcuts.size() >= limit) break;
-+
-+            // タブに紐づかない情報が欲しいので、タブ ID は無効値で問い合わせる。
-+            // 一覧を取った直後に無効化された拡張機能などは null になる。
-+            ExtensionAction action = bridge.getAction(actionId, Tab.INVALID_TAB_ID);
++        for (String actionId : mBridge.getActionIds()) {
++            // Ask about no tab in particular: a shortcut is not tied to one.
++            ExtensionAction action = mBridge.getAction(actionId, Tab.INVALID_TAB_ID);
 +            if (action == null) continue;
 +            String title = action.getTitle();
 +            if (title.isEmpty()) continue;
 +
 +            Intent intent = new Intent(Intent.ACTION_MAIN);
-+            intent.setPackage(context.getPackageName());
++            intent.setPackage(mActivity.getPackageName());
 +            intent.putExtra(EXTRA_EXTENSION_ID, actionId);
 +            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 +
 +            ShortcutInfo.Builder builder =
-+                    new ShortcutInfo.Builder(context, SHORTCUT_ID_PREFIX + actionId)
++                    new ShortcutInfo.Builder(mActivity, SHORTCUT_ID_PREFIX + actionId)
 +                            .setShortLabel(title)
 +                            .setLongLabel(title)
 +                            .setIntent(intent);
 +
 +            Bitmap icon =
-+                    bridge.getActionIcon(
++                    mBridge.getActionIcon(
 +                            actionId,
 +                            Tab.INVALID_TAB_ID,
 +                            /* webContents= */ null,
 +                            ICON_SIZE_DP,
 +                            ICON_SIZE_DP,
-+                            context.getResources().getDisplayMetrics().density);
++                            density);
 +            if (icon != null) {
 +                builder.setIcon(Icon.createWithBitmap(icon));
 +            }
@@ -183,36 +532,155 @@ index 0000000..0283364
 +        }
 +        return shortcuts;
 +    }
-+
++}
+diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+index cc71dd9..94ffeaf 100644
+--- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
++++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+@@ -4338,6 +4338,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+       <message name="IDS_BEX_SOURCE_CODE_TITLE" desc="Settings entry that opens the source repository of this browser.">
+         ソースコード
+       </message>
++      <message name="IDS_BEX_SHORTCUT_EXTENSION_GONE" desc="Shown when the user taps a home screen shortcut for an extension that is no longer installed or enabled.">
++        この拡張機能は利用できません
++      </message>
+       <message name="IDS_MENU_EXTENSIONS" desc="Menu item for opening the 'Extensions' page that allows the user to manage installed extensions. [CHAR_LIMIT=27]">
+         Extensions
+       </message>
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java
+index b1c02ed..9718ed6 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListCoordinator.java
+@@ -128,6 +128,16 @@ public class ExtensionActionListCoordinator implements Destroyable {
+         LifetimeAssert.setSafeToGc(mLifetimeAssert, true);
+     }
+ 
 +    /**
-+     * ショートカットから起動されたなら、その拡張機能を実行する。
++     * mobile-bex: Runs the given action without going through its button view.
 +     *
-+     * @return 実行したかどうか。
++     * <p>{@link #click} needs the button to be laid out in the RecyclerView, so it only works for
++     * pinned actions. Launcher shortcuts can point at any installed extension, so they need this.
 +     */
-+    public static boolean maybeRunFromIntent(
-+            @Nullable Intent intent, ChromeAndroidTask task, Profile profile) {
-+        if (intent == null) return false;
-+        String actionId = intent.getStringExtra(EXTRA_EXTENSION_ID);
-+        if (actionId == null || actionId.isEmpty()) return false;
++    public void runAction(String actionId) {
++        mMediator.runAction(actionId);
++    }
 +
-+        // 一度実行したら消す。画面回転などで Activity が作り直されるたびに
-+        // 起動されては困る。
-+        intent.removeExtra(EXTRA_EXTENSION_ID);
+     /** Performs a click on the button for the given action. */
+     public void click(String actionId) {
+         View view = getButtonViewForId(actionId);
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
+index 1594ced..b5410cf 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionActionListMediator.java
+@@ -59,6 +59,9 @@ class ExtensionActionListMediator implements Destroyable {
+     @Nullable private ExtensionActionPopup mCurrentPopup;
+     @Nullable private String mCurrentPopupActionId;
+ 
++    /** mobile-bex: an action asked for before the toolbar knew about it. See {@link #runAction}. */
++    @Nullable private String mPendingRunActionId;
 +
-+        ExtensionsToolbarBridge bridge = new ExtensionsToolbarBridge(task, profile);
-+        try {
-+            bridge.executeUserAction(actionId, InvocationSource.MENU_ENTRY);
-+            return true;
-+        } catch (RuntimeException e) {
-+            Log.w(TAG, "Could not run extension from shortcut", e);
-+            return false;
-+        } finally {
-+            bridge.destroy();
+     public ExtensionActionListMediator(
+             Context context,
+             WindowAndroid windowAndroid,
+@@ -249,6 +252,34 @@ class ExtensionActionListMediator implements Destroyable {
+         mExtensionsToolbarBridge.executeUserAction(actionId, InvocationSource.TOOLBAR_BUTTON);
+     }
+ 
++    /**
++     * mobile-bex: Runs the action as if its toolbar button was tapped.
++     *
++     * <p>This must go through the bridge instance owned by this mediator: the native side answers
++     * an {@code executeUserAction} call by calling {@code triggerPopup} back on the same bridge,
++     * and only this one has a delegate that can show the popup.
++     *
++     * <p>The toolbar learns about the actions on its own schedule, so the caller may name one it
++     * does not know yet. In that case the request is held until {@code onActionsInitialized}.
++     */
++    public void runAction(String actionId) {
++        if (mExtensionsToolbarBridge.getAction(actionId) == null) {
++            mPendingRunActionId = actionId;
++            return;
++        }
++        mPendingRunActionId = null;
++        onPrimaryClick(actionId);
++    }
++
++    private void runPendingActionIfAny() {
++        if (mPendingRunActionId == null) return;
++        String actionId = mPendingRunActionId;
++        mPendingRunActionId = null;
++        if (mExtensionsToolbarBridge.getAction(actionId) != null) {
++            onPrimaryClick(actionId);
 +        }
 +    }
 +
-+    /** 起動のたびに呼ぶ。重い処理ではないが、UI を待たせる理由もないので後回しにする。 */
-+    public static void updateSoon(Activity activity, ChromeAndroidTask task, Profile profile) {
-+        PostTask.postTask(TaskTraits.UI_BEST_EFFORT, () -> update(activity, task, profile));
+     private void triggerPopup(String actionId, long nativeHostPtr) {
+         mCurrentPopupActionId = actionId;
+         closeCurrentSheet();
+@@ -328,11 +359,13 @@ class ExtensionActionListMediator implements Destroyable {
+         @Override
+         public void onActionsInitialized() {
+             reconcileActionItems();
++            runPendingActionIfAny();
+         }
+ 
+         @Override
+         public void onActionAdded(String actionId) {
+             reconcileActionItems();
++            runPendingActionIfAny();
+         }
+ 
+         @Override
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinator.java
+index 53c5da3..d2e014b 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinator.java
+@@ -100,4 +100,13 @@ public interface ExtensionToolbarCoordinator extends Destroyable {
+      * transitioning into incognito mode.
+      */
+     void updateMenuButtonBackground(int backgroundResource);
++
++    /**
++     * mobile-bex: Runs an extension action as if its toolbar button was tapped.
++     *
++     * <p>Unlike {@link #dispatchKeyEvent}, this works for actions whose buttons are not currently
++     * laid out (e.g. unpinned ones), because it does not go through the button view. It is used by
++     * the launcher shortcuts, where there is no view to click.
++     */
++    void runAction(String actionId);
+ }
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java
+index d148542..5c4c17e 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionToolbarCoordinatorImpl.java
+@@ -110,4 +110,9 @@ public class ExtensionToolbarCoordinatorImpl implements ExtensionToolbarCoordina
+     public void updateMenuButtonBackground(int backgroundResource) {
+         mExtensionsMenuAndAccessControlButtonCoordinator.updateButtonBackground(backgroundResource);
+     }
++
++    @Override
++    public void runAction(String actionId) {
++        mExtensionActionListCoordinator.runAction(actionId);
 +    }
-+}
+ }
+diff --git a/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc b/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc
+index cb6f3f9..76d05d6 100644
+--- a/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc
++++ b/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc
+@@ -142,7 +142,15 @@ ExtensionsToolbarViewModel::GetButtonState(
+ void ExtensionsToolbarViewModel::ExecuteUserAction(
+     const ToolbarActionsModel::ActionId& action_id,
+     ToolbarActionViewModel::InvocationSource source) {
+-  GetActionModelForId(action_id)->ExecuteUserAction(source);
++  // mobile-bex: GetActionModelForId() returns null for an id this model does
++  // not know, e.g. before OnToolbarModelInitialized() has run, or for an
++  // extension that was just uninstalled. Dereferencing it crashed the browser
++  // when launching an extension from a launcher shortcut.
++  ToolbarActionViewModel* action = GetActionModelForId(action_id);
++  if (!action) {
++    return;
++  }
++  action->ExecuteUserAction(source);
+ }
+ 
+ // Extensions are included in the request access button only when:

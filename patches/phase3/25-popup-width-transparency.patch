@@ -3,7 +3,7 @@
 # 上流の最大幅 800dip がスマホ画面より広く見切れる問題も修正する。
 # (シート側の透過・サイズ追従は Patch 09 に含まれる)
 diff --git a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
-index 5b7959f..1d8f894 100644
+index 5b7959f..f055c53 100644
 --- a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
 +++ b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
 @@ -12,6 +12,8 @@
@@ -33,7 +33,7 @@ index 5b7959f..1d8f894 100644
  }  // namespace
  
  ExtensionActionPopupContents::ExtensionActionPopupContents(
-@@ -121,7 +134,51 @@ void ExtensionActionPopupContents::LoadInitialPage(JNIEnv* env) {
+@@ -121,7 +134,56 @@ void ExtensionActionPopupContents::LoadInitialPage(JNIEnv* env) {
  
  void ExtensionActionPopupContents::SetUpNewMainFrame(
      RenderFrameHost* render_frame_host) {
@@ -64,6 +64,11 @@ index 5b7959f..1d8f894 100644
 +  if (available_width > 0) {
 +    // シートより広く描かせない (はみ出すと見切れる)。
 +    max_size.set_width(available_width);
++    // 幅は常に画面幅まで広げる。最小幅を上流の 25 DIP のままにすると、中身が
++    // 少ないポップアップ (「保存中の配信: なし」だけ、など) が細く描画され、
++    // 文字が折り返されて読めなくなる。シートはどのみち画面幅で表示されるので、
++    // 中身の量にかかわらず同じ幅で描かせる。
++    min_size.set_width(available_width);
 +  }
 +  min_size.SetToMin(max_size);
 +  render_frame_host->GetView()->EnableAutoResize(min_size, max_size);

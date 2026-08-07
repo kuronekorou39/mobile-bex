@@ -15,10 +15,153 @@
 #   - UpdateStatusProvider が「Play ストアが入っていること」を更新の条件にしていた。
 #     サイドロード配布では関係ないので外す
 #
+# 「BEX について」に「更新を確認」と「ソースコード」も置く。自動確認は1日1回なので、
+# 自分のタイミングで調べる手段と、配布元への導線を用意しておく。確認中も結果も
+# その場の文字を書き換えるだけにして、ダイアログや画面遷移で操作を遮らない。
+# 更新が見つかったときだけ、押せば配布ページを開く。
+#
 # 確認は1日1回に抑える (GitHub API は未認証で 60 req/hour/IP)。通信に失敗しても
 # 時刻は進め、繋がらないたびに起動のたび叩きに行かないようにしている。
 # 通信は ChromiumNetworkAdapter 経由で行う (URL#openConnection の直接使用は
 # Chromium では禁止されており、ネットワークトラフィック注釈が必要)。
+diff --git a/chrome/android/java/res/xml/about_chrome_preferences.xml b/chrome/android/java/res/xml/about_chrome_preferences.xml
+index fb1dfed..56188b7 100644
+--- a/chrome/android/java/res/xml/about_chrome_preferences.xml
++++ b/chrome/android/java/res/xml/about_chrome_preferences.xml
+@@ -12,6 +12,13 @@ found in the LICENSE file.
+     <org.chromium.chrome.browser.about_settings.AboutChromePreferenceOSVersion
+         android:key="os_version"
+         android:title="@string/os_version_title" />
++    <!-- mobile-bex: サイドロード配布なので、更新の確認と配布元への導線をここに置く。 -->
++    <Preference
++        android:key="bex_check_update"
++        android:title="@string/bex_check_update_title" />
++    <Preference
++        android:key="bex_source_code"
++        android:title="@string/bex_source_code_title" />
+     <org.chromium.chrome.browser.about_settings.LongClickCopySummaryPreference
+         android:fragment="org.chromium.chrome.browser.about_settings.LegalInformationSettings"
+         android:key="legal_information"
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java
+index 70db74f..17b8c66 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java
+@@ -7,8 +7,10 @@ package org.chromium.chrome.browser.about_settings;
+ import static org.chromium.build.NullUtil.assumeNonNull;
+ 
+ import android.content.Context;
++import android.content.Intent;
+ import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager.NameNotFoundException;
++import android.net.Uri;
+ import android.os.Bundle;
+ import android.text.format.DateUtils;
+ 
+@@ -21,6 +23,8 @@ import org.chromium.base.version_info.VersionInfo;
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.R;
++import org.chromium.chrome.browser.omaha.BexUpdateChecker;
++import org.chromium.chrome.browser.omaha.VersionNumber;
+ import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
+ import org.chromium.chrome.browser.settings.search.ChromeBaseSearchIndexProvider;
+ import org.chromium.chrome.browser.tracing.settings.DeveloperSettings;
+@@ -42,6 +46,10 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+ 
+     private static final int TAPS_FOR_DEVELOPER_SETTINGS = 7;
+ 
++    // mobile-bex: サイドロード配布のため、更新の確認と配布元への導線をここに置く。
++    private static final String PREF_BEX_CHECK_UPDATE = "bex_check_update";
++    private static final String PREF_BEX_SOURCE_CODE = "bex_source_code";
++
+     private static final String PREF_APPLICATION_VERSION = "application_version";
+     private static final String PREF_OS_VERSION = "os_version";
+     private static final String PREF_LEGAL_INFORMATION = "legal_information";
+@@ -60,6 +68,8 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+     private int mDeveloperHitCountdown =
+             DeveloperSettings.shouldShowDeveloperSettings() ? -1 : TAPS_FOR_DEVELOPER_SETTINGS;
+     private @Nullable Toast mToast;
++    // mobile-bex: 更新確認の二重起動を防ぐ。
++    private boolean mBexUpdateCheckRunning;
+     private final SettableMonotonicObservableSupplier<String> mPageTitle =
+             ObservableSuppliers.createMonotonic();
+ 
+@@ -82,6 +92,75 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+         calendar.setTimeInMillis(System.currentTimeMillis());
+         int currentYear = calendar.get(Calendar.YEAR);
+         p.setSummary(getString(R.string.legal_information_summary, currentYear));
++
++        setUpBexPreferences();
++    }
++
++    /**
++     * mobile-bex: 「更新を確認」と「ソースコード」を設定する。
++     *
++     * <p>確認中も結果もその場の文字を書き換えるだけにして、ダイアログや画面遷移で操作を
++     * 遮らない。更新が見つかったときだけ、押せば配布ページを開く。
++     */
++    private void setUpBexPreferences() {
++        Preference update = findPreference(PREF_BEX_CHECK_UPDATE);
++        assumeNonNull(update);
++        update.setOnPreferenceClickListener(
++                pref -> {
++                    if (mBexUpdateCheckRunning) return true;
++                    mBexUpdateCheckRunning = true;
++                    pref.setSummary(getString(R.string.bex_update_checking));
++                    BexUpdateChecker.checkNow(
++                            latestVersion -> {
++                                mBexUpdateCheckRunning = false;
++                                // 確認中に設定画面を閉じられていることがある。
++                                if (!isAdded()) return;
++                                onBexUpdateChecked(pref, latestVersion);
++                            });
++                    return true;
++                });
++
++        Preference source = findPreference(PREF_BEX_SOURCE_CODE);
++        assumeNonNull(source);
++        source.setSummary(BexUpdateChecker.getRepositoryUrl());
++        source.setOnPreferenceClickListener(
++                pref -> {
++                    openUrlInNewTab(BexUpdateChecker.getRepositoryUrl());
++                    return true;
++                });
++    }
++
++    private void onBexUpdateChecked(Preference pref, @Nullable String latestVersion) {
++        if (latestVersion == null) {
++            pref.setSummary(getString(R.string.bex_update_failed));
++            pref.setOnPreferenceClickListener(null);
++            setUpBexPreferences();
++            return;
++        }
++
++        VersionNumber current = VersionNumber.fromString(VersionInfo.getProductVersion());
++        VersionNumber latest = VersionNumber.fromString(latestVersion);
++        if (current != null && latest != null && current.isSmallerThan(latest)) {
++            pref.setSummary(getString(R.string.bex_update_available, latestVersion));
++            pref.setOnPreferenceClickListener(
++                    p -> {
++                        openUrlInNewTab(BexUpdateChecker.getReleasesPageUrl());
++                        return true;
++                    });
++        } else {
++            pref.setSummary(getString(R.string.bex_update_latest));
++            setUpBexPreferences();
++        }
++    }
++
++    private void openUrlInNewTab(String url) {
++        Context context = getActivity();
++        if (context == null) return;
++        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
++        // 自分で開く。外部ブラウザに渡す意味がない。
++        intent.setPackage(context.getPackageName());
++        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++        context.startActivity(intent);
+     }
+ 
+     @Override
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 index 4806572..cdc68d8 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
@@ -64,10 +207,10 @@ index 16a1f58..c528a54 100644
      "//chrome/browser/preferences:java",
 diff --git a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java
 new file mode 100644
-index 0000000..4dd359c
+index 0000000..4c548f6
 --- /dev/null
 +++ b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,194 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -79,11 +222,13 @@ index 0000000..4dd359c
 +
 +import org.json.JSONObject;
 +
++import org.chromium.base.Callback;
 +import org.chromium.base.Log;
 +import org.chromium.base.StreamUtil;
 +import org.chromium.base.task.PostTask;
 +import org.chromium.base.task.TaskTraits;
 +import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
 +import org.chromium.net.ChromiumNetworkAdapter;
 +import org.chromium.net.NetworkTrafficAnnotationTag;
 +
@@ -115,6 +260,7 @@ index 0000000..4dd359c
 +            "https://api.github.com/repos/kuronekorou39/mobile-bex/releases/latest";
 +    private static final String RELEASES_PAGE =
 +            "https://github.com/kuronekorou39/mobile-bex/releases/latest";
++    private static final String REPOSITORY_PAGE = "https://github.com/kuronekorou39/mobile-bex";
 +
 +    /** 最後に確認した時刻。GitHub API は未認証だと 60 req/hour/IP なので1日1回に抑える。 */
 +    private static final String PREF_LAST_CHECK_MS = "bexLastUpdateCheckMs";
@@ -161,6 +307,39 @@ index 0000000..4dd359c
 +        PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, BexUpdateChecker::checkIfDue);
 +    }
 +
++    /**
++     * 設定画面から手動で確認する。1日1回の制限は無視する。自分で押したときまで待たされる
++     * 理由がないため。
++     *
++     * @param callback 最新版の版数を UI スレッドで受け取る。取得できなければ null。
++     */
++    public static void checkNow(Callback<@Nullable String> callback) {
++        PostTask.postTask(
++                TaskTraits.BEST_EFFORT_MAY_BLOCK,
++                () -> {
++                    String version = fetchLatestVersion();
++                    if (version != null) {
++                        OmahaPrefUtils.getSharedPreferences()
++                                .edit()
++                                .putString(OmahaPrefUtils.PREF_LATEST_VERSION, version)
++                                .putString(OmahaPrefUtils.PREF_MARKET_URL, RELEASES_PAGE)
++                                .putLong(PREF_LAST_CHECK_MS, System.currentTimeMillis())
++                                .apply();
++                    }
++                    PostTask.postTask(TaskTraits.UI_DEFAULT, () -> callback.onResult(version));
++                });
++    }
++
++    /** リリース一覧のページ。「ソースコード」から開く先にも使う。 */
++    public static String getReleasesPageUrl() {
++        return RELEASES_PAGE;
++    }
++
++    /** リポジトリのページ。 */
++    public static String getRepositoryUrl() {
++        return REPOSITORY_PAGE;
++    }
++
 +    private static void checkIfDue() {
 +        SharedPreferences prefs = OmahaPrefUtils.getSharedPreferences();
 +        long now = System.currentTimeMillis();
@@ -186,7 +365,7 @@ index 0000000..4dd359c
 +    /**
 +     * @return リリースの版数 (タグの先頭の "v" を除いたもの)。取れなければ null。
 +     */
-+    private static @org.chromium.build.annotations.Nullable String fetchLatestVersion() {
++    private static @Nullable String fetchLatestVersion() {
 +        HttpURLConnection connection = null;
 +        BufferedReader reader = null;
 +        try {

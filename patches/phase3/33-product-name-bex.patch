@@ -27,10 +27,35 @@ index 2e36329..2b325be 100644
  
          <!-- Extension uninstall prompt -->
 diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-index 83a0c39..d5e70d1 100644
+index 83a0c39..80929bb 100644
 --- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
 +++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-@@ -6531,7 +6531,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -4317,6 +4317,24 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+       <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
+         小窓表示
+       </message>
++      <message name="IDS_BEX_CHECK_UPDATE_TITLE" desc="Settings entry that checks GitHub for a newer release of this browser.">
++        更新を確認
++      </message>
++      <message name="IDS_BEX_UPDATE_CHECKING" desc="Shown while the update check is in progress.">
++        確認中…
++      </message>
++      <message name="IDS_BEX_UPDATE_LATEST" desc="Shown when the running version is the newest published one.">
++        最新版です
++      </message>
++      <message name="IDS_BEX_UPDATE_AVAILABLE" desc="Shown when a newer version exists. The placeholder is a version number such as 0.1.7. Tapping opens the release page.">
++        <ph name="VERSION">%1$s<ex>0.1.7</ex></ph> が公開されています。タップで配布ページを開きます
++      </message>
++      <message name="IDS_BEX_UPDATE_FAILED" desc="Shown when the update check could not reach GitHub.">
++        確認できませんでした
++      </message>
++      <message name="IDS_BEX_SOURCE_CODE_TITLE" desc="Settings entry that opens the source repository of this browser.">
++        ソースコード
++      </message>
+       <message name="IDS_MENU_EXTENSIONS" desc="Menu item for opening the 'Extensions' page that allows the user to manage installed extensions. [CHAR_LIMIT=27]">
+         Extensions
+       </message>
+@@ -6531,7 +6549,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
  
        <!-- Notification Permission Rationale Dialog Strings-->
        <message name="IDS_NOTIFICATION_PERMISSION_RATIONALE_DIALOG_TITLE" desc="The title of a dialog shown to users before asking for notification permission.">

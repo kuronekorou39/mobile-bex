@@ -1,7 +1,14 @@
-# Patch 25: ポップアップの幅の扱いを改善
+# Patch 25: ポップアップとメニューの幅の扱いを改善
 # 可変レイアウトのポップアップをシート幅いっぱいに広げられるようにし、
 # 上流の最大幅 800dip がスマホ画面より広く見切れる問題も修正する。
 # (シート側の透過・サイズ追従は Patch 09 に含まれる)
+#
+# 幅が足りずに読めなくなる箇所が2つあったので、下限を持たせる:
+#   - 拡張機能のポップアップ: 中身が少ないと最小幅 25dip まで縮み、文字が折り返されて
+#     読めなくなる。シートはどのみち画面幅で表示されるので最小幅も画面幅にする
+#   - ツールバーの拡張機能メニュー: 拡張機能が1つも入っていないとヘッダの幅に合わせて
+#     縮み、「他の拡張機能を見る」「拡張機能を管理」が途中で切れる。ルートが
+#     wrap_content なので minWidth を与える
 diff --git a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc b/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
 index 5b7959f..f055c53 100644
 --- a/chrome/browser/ui/android/extensions/extension_action_popup_contents.cc
@@ -125,6 +132,35 @@ index 303b15f..0ba11d3 100644
  };
  
  }  // namespace extensions
+diff --git a/chrome/browser/ui/android/extensions/java/res/layout/extensions_menu.xml b/chrome/browser/ui/android/extensions/java/res/layout/extensions_menu.xml
+index 05657eb..817ddab 100644
+--- a/chrome/browser/ui/android/extensions/java/res/layout/extensions_menu.xml
++++ b/chrome/browser/ui/android/extensions/java/res/layout/extensions_menu.xml
+@@ -11,6 +11,7 @@ found in the LICENSE file.
+     xmlns:app="http://schemas.android.com/apk/res-auto"
+     android:layout_width="wrap_content"
+     android:layout_height="wrap_content"
++    android:minWidth="@dimen/extension_menu_min_width"
+     android:orientation="vertical"
+     android:clipToOutline="true"
+     android:background="@drawable/default_popup_menu_bg"
+diff --git a/chrome/browser/ui/android/extensions/java/res/values/dimens.xml b/chrome/browser/ui/android/extensions/java/res/values/dimens.xml
+index 3a146fa..465c0aa 100644
+--- a/chrome/browser/ui/android/extensions/java/res/values/dimens.xml
++++ b/chrome/browser/ui/android/extensions/java/res/values/dimens.xml
+@@ -7,6 +7,12 @@ found in the LICENSE file.
+ 
+ <resources xmlns:tools="http://schemas.android.com/tools">
+     <dimen name="extension_menu_max_width">400dp</dimen>
++    <!--
++        mobile-bex: メニューの最小幅。拡張機能が1つも入っていないとヘッダの幅に
++        合わせて縮み、「他の拡張機能を見る」「拡張機能を管理」が途中で切れて
++        読めなくなる。項目が収まる幅を下限として持たせる。
++    -->
++    <dimen name="extension_menu_min_width">280dp</dimen>
+     <!--
+         The width of the toolbar reserved for everything *except* extension
+         action buttons. Currently it is set to the minimum width for the tablet
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java
 index 8f0ff85..7ea772f 100644
 --- a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java

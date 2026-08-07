@@ -28,27 +28,26 @@ versionCode はリベースしない限り変わらないため（同じ Chromiu
 
 ## 更新をどう届けるか
 
-### 現在: 手動 + Obtainium (推奨)
+### アプリ内で更新を知らせる (Patch 34)
 
-利用者側の選択肢:
+`BexUpdateChecker` が GitHub の API
+(`https://api.github.com/repos/<owner>/<repo>/releases/latest`) から最新リリースを取り、
+`tag_name` を今の版数と比べる。新しければ、Omaha が使うのと同じ SharedPreferences に
+書き込む。以降の判定と UI（三点メニューの「更新」項目、ツールバーのバッジ）は
+上流のものがそのまま動き、押すとリリースページが開く。
 
-1. **GitHub のリリースページを見る** — 何も実装しなくてよい。リリースノートで
-   変更点を伝える
-2. **[Obtainium](https://github.com/ImranR98/Obtainium) を使う** — GitHub の
-   リリースを監視して、サイドロードしたアプリを自動更新してくれる Android アプリ。
-   BEX 側の実装は不要で、利用者がリポジトリの URL を登録するだけ
+- 確認は起動時に1日1回まで。API のレート制限は未認証で 60 req/hour/IP
+- 設定 → BEX について → 「更新を確認」から手動でも調べられる
+- 版数の取得に `ApkInfo.getPackageVersionName()` は使えない。名前に反して、
+  ブラウザとして起動した経路では Chromium の版数 (147.x) を返す。
+  `BexUpdateChecker.getInstalledVersion()` が PackageManager から直接取る
 
-サイドロード配布ではこの2つが実用的な落としどころ。README に Obtainium での
-登録方法を書いておけば、実質的に自動更新が実現できる。
+### 併用: Obtainium
 
-### 将来の選択肢: アプリ内で更新を確認する
-
-GitHub の API (`https://api.github.com/repos/<owner>/<repo>/releases/latest`) を
-定期的に叩き、`tag_name` を現在の版数と比べて、新しければ通知やバナーを出す。
-
-- 利点: 利用者が Obtainium を知らなくても気づける
-- 注意: API のレート制限（未認証で 60 req/hour/IP）があるため、確認は1日1回程度に
-  絞る。またネットワークアクセスが増えるので、既定で有効にするかは要検討
+[Obtainium](https://github.com/ImranR98/Obtainium) は GitHub のリリースを監視して、
+サイドロードしたアプリを更新してくれる Android アプリ。BEX 側の実装は不要で、
+利用者がリポジトリの URL を登録するだけ。ダウンロードとインストールまで任せたい
+場合はこちら。
 
 ### 実装しない方針: アプリ内での自動ダウンロード・インストール
 

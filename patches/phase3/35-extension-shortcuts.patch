@@ -1,0 +1,218 @@
+# Patch 35: 拡張機能をホーム画面のショートカットにする
+# BEX のアイコンを長押しすると、インストール済みの拡張機能が並ぶ。そこから
+# ホーム画面にドラッグして置けば、拡張機能を「アプリのように」直接起動できる。
+# 拡張機能ごとにアイコンとタイトルを持たせるので、置いたあとも見分けがつく。
+#
+# 実装は Android の動的ショートカット (ShortcutManager)。起動のたびに
+# BexExtensionShortcuts.updateSoon() で作り直し、インストールや削除に追随する。
+# 上限 (ランチャー依存、多くは4〜5個) を超える分は先頭から切る。
+#
+# ショートカットから起動されたときは、intent に載せた拡張機能 ID を
+# maybeRunFromIntent() が拾って ExtensionsToolbarBridge.executeUserAction() に渡す。
+# ツールバーのアイコンを押したのと同じ経路なので、ポップアップも開く。
+#
+# intent は Intent#setPackage で自分宛てに限定してある。chrome-extension:// を
+# intent-filter で公開する方式は採らなかった。あれだと任意のアプリが拡張機能の
+# ページを開ける口になってしまう。
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
+index cdc68d8..114d67c 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
+@@ -121,6 +121,7 @@ import org.chromium.chrome.browser.multiwindow.MultiWindowUtils;
+ import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils;
+ import org.chromium.chrome.browser.ntp_customization.edge_to_edge.TopInsetCoordinator;
+ import org.chromium.chrome.browser.omaha.BexUpdateChecker;
++import org.chromium.chrome.browser.ui.extensions.BexExtensionShortcuts;
+ import org.chromium.chrome.browser.omnibox.OmniboxActionDelegateImpl;
+ import org.chromium.chrome.browser.omnibox.OmniboxChipManager;
+ import org.chromium.chrome.browser.omnibox.geo.GeolocationHeader;
+@@ -1359,6 +1360,16 @@ public class RootUiCoordinator
+         // 結果は Omaha と同じ保存先に書かれ、三点メニューの「更新」項目に反映される。
+         BexUpdateChecker.maybeCheck();
+ 
++        // mobile-bex: 拡張機能をランチャーのショートカットとして出す。BEX のアイコンを
++        // 長押しすると並び、ホーム画面に置ける。併せて、そのショートカットから起動された
++        // 場合はここで拡張機能を実行する。この時点なら拡張機能の読み込みが済んでいる。
++        ChromeAndroidTask task = mChromeAndroidTaskSupplier.get();
++        if (task != null) {
++            BexExtensionShortcuts.maybeRunFromIntent(
++                    mActivity.getIntent(), task, originalProfile);
++            BexExtensionShortcuts.updateSoon(mActivity, task, originalProfile);
++        }
++
+         initMerchantTrustSignals(originalProfile);
+     }
+ 
+diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/android/extensions/BUILD.gn
+index 1084616..4562c8d 100644
+--- a/chrome/browser/ui/android/extensions/BUILD.gn
++++ b/chrome/browser/ui/android/extensions/BUILD.gn
+@@ -49,6 +49,7 @@ android_library("java") {
+       "//components/thin_webview:java",
+     ]
+     sources += [
++      "java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionAction.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionContextMenuBridge.java",
+       "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
+diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java
+new file mode 100644
+index 0000000..0283364
+--- /dev/null
++++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/BexExtensionShortcuts.java
+@@ -0,0 +1,155 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ui.extensions;
++
++import android.app.Activity;
++import android.content.Context;
++import android.content.Intent;
++import android.content.pm.ShortcutInfo;
++import android.content.pm.ShortcutManager;
++import android.graphics.Bitmap;
++import android.graphics.drawable.Icon;
++
++import org.chromium.base.Log;
++import org.chromium.base.task.PostTask;
++import org.chromium.base.task.TaskTraits;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.chrome.browser.tab.Tab;
++import org.chromium.chrome.browser.ui.browser_window.ChromeAndroidTask;
++import org.chromium.chrome.browser.ui.toolbar.InvocationSource;
++
++import java.util.ArrayList;
++import java.util.List;
++
++/**
++ * mobile-bex: インストール済みの拡張機能を、ランチャーのショートカットとして出す。
++ *
++ * <p>BEX のアイコンを長押しすると拡張機能が並び、そこからホーム画面に置ける。置いた
++ * アイコンを押すと、ブラウザが立ち上がってその拡張機能が実行される。拡張機能を「アプリの
++ * ように」使うための導線。
++ *
++ * <p>ショートカットの intent はランチャーに保存されるが、{@link Intent#setPackage} で
++ * 自分宛てに限定してあり、外部のアプリから拡張機能を起動させる口にはならない。
++ * chrome-extension:// を intent-filter で公開する方式は採らなかった。あれは任意のアプリが
++ * 拡張機能のページを開けるようになってしまう。
++ */
++@NullMarked
++public class BexExtensionShortcuts {
++    private static final String TAG = "BexExtShortcuts";
++
++    /** ショートカットから起動されたときに、実行する拡張機能の ID を載せる。 */
++    public static final String EXTRA_EXTENSION_ID =
++            "org.chromium.chrome.browser.ui.extensions.EXTENSION_ID";
++
++    private static final String SHORTCUT_ID_PREFIX = "bex-extension-";
++
++    /** アイコンを取り出すときの一辺 (DIP)。ランチャーが縮小するので大きめに取る。 */
++    private static final int ICON_SIZE_DP = 48;
++
++    private BexExtensionShortcuts() {}
++
++    /**
++     * インストール済みの拡張機能でショートカットを作り直す。
++     *
++     * <p>動的ショートカットの上限はランチャーが決める (多くは4〜5個)。上限を超える分は
++     * 黙って捨てられるので、こちらで先頭から上限までに絞る。
++     */
++    public static void update(Activity activity, ChromeAndroidTask task, Profile profile) {
++        ShortcutManager manager = activity.getSystemService(ShortcutManager.class);
++        if (manager == null) return;
++
++        ExtensionActionsBridge bridge = new ExtensionActionsBridge(task, profile);
++        try {
++            if (!bridge.areActionsInitialized()) {
++                // まだ読み込めていない。次の起動で作られる。
++                return;
++            }
++            List<ShortcutInfo> shortcuts = buildShortcuts(activity, manager, bridge);
++            manager.setDynamicShortcuts(shortcuts);
++        } catch (IllegalStateException | IllegalArgumentException e) {
++            // 端末やランチャーによっては拒否される。ショートカットが出ないだけで、
++            // ブラウザの動作には影響しない。
++            Log.w(TAG, "Could not publish extension shortcuts", e);
++        } finally {
++            bridge.destroy();
++        }
++    }
++
++    private static List<ShortcutInfo> buildShortcuts(
++            Context context, ShortcutManager manager, ExtensionActionsBridge bridge) {
++        List<ShortcutInfo> shortcuts = new ArrayList<>();
++        int limit = manager.getMaxShortcutCountPerActivity();
++
++        for (String actionId : bridge.getActionIds()) {
++            if (shortcuts.size() >= limit) break;
++
++            // タブに紐づかない情報が欲しいので、タブ ID は無効値で問い合わせる。
++            // 一覧を取った直後に無効化された拡張機能などは null になる。
++            ExtensionAction action = bridge.getAction(actionId, Tab.INVALID_TAB_ID);
++            if (action == null) continue;
++            String title = action.getTitle();
++            if (title.isEmpty()) continue;
++
++            Intent intent = new Intent(Intent.ACTION_MAIN);
++            intent.setPackage(context.getPackageName());
++            intent.putExtra(EXTRA_EXTENSION_ID, actionId);
++            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++
++            ShortcutInfo.Builder builder =
++                    new ShortcutInfo.Builder(context, SHORTCUT_ID_PREFIX + actionId)
++                            .setShortLabel(title)
++                            .setLongLabel(title)
++                            .setIntent(intent);
++
++            Bitmap icon =
++                    bridge.getActionIcon(
++                            actionId,
++                            Tab.INVALID_TAB_ID,
++                            /* webContents= */ null,
++                            ICON_SIZE_DP,
++                            ICON_SIZE_DP,
++                            context.getResources().getDisplayMetrics().density);
++            if (icon != null) {
++                builder.setIcon(Icon.createWithBitmap(icon));
++            }
++            shortcuts.add(builder.build());
++        }
++        return shortcuts;
++    }
++
++    /**
++     * ショートカットから起動されたなら、その拡張機能を実行する。
++     *
++     * @return 実行したかどうか。
++     */
++    public static boolean maybeRunFromIntent(
++            @Nullable Intent intent, ChromeAndroidTask task, Profile profile) {
++        if (intent == null) return false;
++        String actionId = intent.getStringExtra(EXTRA_EXTENSION_ID);
++        if (actionId == null || actionId.isEmpty()) return false;
++
++        // 一度実行したら消す。画面回転などで Activity が作り直されるたびに
++        // 起動されては困る。
++        intent.removeExtra(EXTRA_EXTENSION_ID);
++
++        ExtensionsToolbarBridge bridge = new ExtensionsToolbarBridge(task, profile);
++        try {
++            bridge.executeUserAction(actionId, InvocationSource.MENU_ENTRY);
++            return true;
++        } catch (RuntimeException e) {
++            Log.w(TAG, "Could not run extension from shortcut", e);
++            return false;
++        } finally {
++            bridge.destroy();
++        }
++    }
++
++    /** 起動のたびに呼ぶ。重い処理ではないが、UI を待たせる理由もないので後回しにする。 */
++    public static void updateSoon(Activity activity, ChromeAndroidTask task, Profile profile) {
++        PostTask.postTask(TaskTraits.UI_BEST_EFFORT, () -> update(activity, task, profile));
++    }
++}

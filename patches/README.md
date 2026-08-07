@@ -8,7 +8,7 @@ Chromium Android に拡張機能サポートを追加するためのパッチ群
 patches/
 ├── phase1/    # 空: PoC はパッチ不要だった（下記参照）
 ├── phase2/    # 空: API 検証もパッチ不要だった
-└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜27）
+└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜35）
 ```
 
 ## Phase 1 / Phase 2 について
@@ -52,6 +52,13 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 26 | `26-webstore-desktop-site.patch` | Chrome ウェブストアを既定でデスクトップ表示にする |
 | 27 | `27-pip-menu.patch` | 三点メニューに「小窓表示」(PiP) を追加。PiP 中はツールバーを隠す |
 | 28 | `28-ntp-hide-unusable.patch` | 新規タブの「AI モード」ボタンとおすすめ記事フィードを消す |
+| 29 | `29-link-capturing.patch` | リンクで勝手にアプリへ飛ばさない。開くのはメニューからの明示操作のみ |
+| 30 | `30-background-playback.patch` | 画面を消しても再生を続ける（バックグラウンド再生） |
+| 31 | `31-new-window-on-phones.patch` | スマホでも「新しいウィンドウ」を出す（上限は画面幅で決めない） |
+| 32 | `32-extensions-ui-no-logo.patch` | chrome://extensions の Chromium ロゴを消す |
+| 33 | `33-product-name-bex.patch` | UI 中の製品名を BEX にする（設定・通知・拡張機能のダイアログ） |
+| 34 | `34-github-update-check.patch` | GitHub のリリースを見て更新を知らせる（Omaha の UI に載せる） |
+| 35 | `35-extension-shortcuts.patch` | 拡張機能をホーム画面のショートカットにする |
 
 ### 欠番について
 
@@ -86,7 +93,7 @@ out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
 # Phase 3 パッチを適用（デフォルト。phase1/2 は空なのでスキップされる）
 ./scripts/apply-patches.sh
 
-# パッチを元に戻す（27→01 の逆順で剥がされる）
+# パッチを元に戻す（35→01 の逆順で剥がされる）
 ./scripts/apply-patches.sh --reverse
 ```
 

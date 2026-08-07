@@ -43,10 +43,10 @@ index fb1dfed..56188b7 100644
          android:fragment="org.chromium.chrome.browser.about_settings.LegalInformationSettings"
          android:key="legal_information"
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java
-index 70db74f..17b8c66 100644
+index 70db74f..b65b0e4 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/about_settings/AboutChromeSettings.java
-@@ -7,8 +7,10 @@ package org.chromium.chrome.browser.about_settings;
+@@ -7,13 +7,16 @@ package org.chromium.chrome.browser.about_settings;
  import static org.chromium.build.NullUtil.assumeNonNull;
  
  import android.content.Context;
@@ -57,7 +57,13 @@ index 70db74f..17b8c66 100644
  import android.os.Bundle;
  import android.text.format.DateUtils;
  
-@@ -21,6 +23,8 @@ import org.chromium.base.version_info.VersionInfo;
+ import androidx.preference.Preference;
+ 
++import org.chromium.base.ApkInfo;
+ import org.chromium.base.supplier.MonotonicObservableSupplier;
+ import org.chromium.base.supplier.ObservableSuppliers;
+ import org.chromium.base.supplier.SettableMonotonicObservableSupplier;
+@@ -21,6 +24,8 @@ import org.chromium.base.version_info.VersionInfo;
  import org.chromium.build.annotations.NullMarked;
  import org.chromium.build.annotations.Nullable;
  import org.chromium.chrome.R;
@@ -66,7 +72,7 @@ index 70db74f..17b8c66 100644
  import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
  import org.chromium.chrome.browser.settings.search.ChromeBaseSearchIndexProvider;
  import org.chromium.chrome.browser.tracing.settings.DeveloperSettings;
-@@ -42,6 +46,10 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+@@ -42,6 +47,10 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
  
      private static final int TAPS_FOR_DEVELOPER_SETTINGS = 7;
  
@@ -77,7 +83,7 @@ index 70db74f..17b8c66 100644
      private static final String PREF_APPLICATION_VERSION = "application_version";
      private static final String PREF_OS_VERSION = "os_version";
      private static final String PREF_LEGAL_INFORMATION = "legal_information";
-@@ -60,6 +68,8 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+@@ -60,6 +69,8 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
      private int mDeveloperHitCountdown =
              DeveloperSettings.shouldShowDeveloperSettings() ? -1 : TAPS_FOR_DEVELOPER_SETTINGS;
      private @Nullable Toast mToast;
@@ -86,7 +92,23 @@ index 70db74f..17b8c66 100644
      private final SettableMonotonicObservableSupplier<String> mPageTitle =
              ObservableSuppliers.createMonotonic();
  
-@@ -82,6 +92,75 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+@@ -70,8 +81,14 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
+ 
+         Preference p = findPreference(PREF_APPLICATION_VERSION);
+         assumeNonNull(p);
++        // mobile-bex: 上流はここに Chromium のバージョン (147.x) を出すが、利用者が見たいのは
++        // BEX の版数のほう。Chromium 版はベースを示す情報として括弧で併記する。
+         p.setSummary(
+-                getApplicationVersion(getActivity(), AboutSettingsBridge.getApplicationVersion()));
++                getString(
++                        R.string.bex_application_version_summary,
++                        ApkInfo.getPackageVersionName(),
++                        getApplicationVersion(
++                                getActivity(), AboutSettingsBridge.getApplicationVersion())));
+         p.setOnPreferenceClickListener(this);
+         p = findPreference(PREF_OS_VERSION);
+         assumeNonNull(p);
+@@ -82,6 +99,79 @@ public class AboutChromeSettings extends ChromeBaseSettingsFragment
          calendar.setTimeInMillis(System.currentTimeMillis());
          int currentYear = calendar.get(Calendar.YEAR);
          p.setSummary(getString(R.string.legal_information_summary, currentYear));
@@ -136,7 +158,11 @@ index 70db74f..17b8c66 100644
 +            return;
 +        }
 +
-+        VersionNumber current = VersionNumber.fromString(VersionInfo.getProductVersion());
++        // mobile-bex: 比べるのは APK の versionName (0.1.9 など)。
++        // VersionInfo.getProductVersion() は Chromium のバージョン (147.x) を返すので、
++        // それを使うと必ず「最新」と判定されてしまう。自動確認側 (VersionNumberGetter) も
++        // ApkInfo を見ているので、そちらと揃える。
++        VersionNumber current = VersionNumber.fromString(ApkInfo.getPackageVersionName());
 +        VersionNumber latest = VersionNumber.fromString(latestVersion);
 +        if (current != null && latest != null && current.isSmallerThan(latest)) {
 +            pref.setSummary(getString(R.string.bex_update_available, latestVersion));

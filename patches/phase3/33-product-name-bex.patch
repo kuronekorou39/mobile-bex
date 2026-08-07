@@ -27,7 +27,7 @@ index 2e36329..2b325be 100644
  
          <!-- Extension uninstall prompt -->
 diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-index 83a0c39..aa2c23f 100644
+index 83a0c39..cc71dd9 100644
 --- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
 +++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
 @@ -2141,7 +2141,7 @@ Your Google account may have other forms of browsing history like searches and a
@@ -39,10 +39,13 @@ index 83a0c39..aa2c23f 100644
        </message>
        <message name="IDS_LEGAL_INFORMATION_SUMMARY" desc="Summary for legal information" meaning="Android">
          Copyright <ph name="year">%1$d<ex>2014</ex></ph> Google LLC. All rights reserved.
-@@ -4317,6 +4317,24 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -4317,6 +4317,27 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
        <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
          小窓表示
        </message>
++      <message name="IDS_BEX_APPLICATION_VERSION_SUMMARY" desc="Version shown in settings. The first placeholder is this browser's own version, the second is the Chromium version it is built from.">
++        <ph name="BEX_VERSION">%1$s<ex>0.1.9</ex></ph>（Chromium <ph name="CHROMIUM_VERSION">%2$s<ex>147.0.7692.0</ex></ph>）
++      </message>
 +      <message name="IDS_BEX_CHECK_UPDATE_TITLE" desc="Settings entry that checks GitHub for a newer release of this browser.">
 +        更新を確認
 +      </message>
@@ -64,7 +67,7 @@ index 83a0c39..aa2c23f 100644
        <message name="IDS_MENU_EXTENSIONS" desc="Menu item for opening the 'Extensions' page that allows the user to manage installed extensions. [CHAR_LIMIT=27]">
          Extensions
        </message>
-@@ -6531,7 +6549,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -6531,7 +6552,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
  
        <!-- Notification Permission Rationale Dialog Strings-->
        <message name="IDS_NOTIFICATION_PERMISSION_RATIONALE_DIALOG_TITLE" desc="The title of a dialog shown to users before asking for notification permission.">

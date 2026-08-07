@@ -8,7 +8,7 @@ Chromium Android に拡張機能サポートを追加するためのパッチ群
 patches/
 ├── phase1/    # 空: PoC はパッチ不要だった（下記参照）
 ├── phase2/    # 空: API 検証もパッチ不要だった
-└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜35）
+└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜37）
 ```
 
 ## Phase 1 / Phase 2 について
@@ -59,6 +59,8 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 33 | `33-product-name-bex.patch` | UI 中の製品名を BEX にする（設定・通知・拡張機能のダイアログ） |
 | 34 | `34-github-update-check.patch` | GitHub のリリースを見て更新を知らせる（Omaha の UI に載せる） |
 | 35 | `35-extension-shortcuts.patch` | 拡張機能をホーム画面のショートカットにする |
+| 36 | `36-incognito-extensions.patch` | シークレットモードで拡張機能を動くようにする（落ちる／「現在のウィンドウなし」を解消） |
+| 37 | `37-extensions-detail-width.patch` | chrome://extensions の詳細ページが横に見切れるのを直す |
 
 ### 欠番について
 
@@ -93,7 +95,7 @@ out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
 # Phase 3 パッチを適用（デフォルト。phase1/2 は空なのでスキップされる）
 ./scripts/apply-patches.sh
 
-# パッチを元に戻す（35→01 の逆順で剥がされる）
+# パッチを元に戻す（37→01 の逆順で剥がされる）
 ./scripts/apply-patches.sh --reverse
 ```
 
@@ -120,6 +122,12 @@ python3 scripts/regen-patches.py --regen 29 --files path/to/a.java,path/to/b.cc
 パッチは順番に重ねる差分なので、同じファイルを複数のパッチが触ることがある
 （例: 04 が作ったクラスを 09 が変更する）。`--regen` で指定しなかったパッチは
 そのまま適用されて土台になるため、累積 diff にはならない。
+
+**後続のパッチが触っているファイルを、前のパッチで作り直すことはできない。**
+再生成は作業ツリーの「最終形」を書き込むので、後続パッチが前提にしている中間状態が
+消え、後続の適用が失敗する（例: 15 と 24 はどちらも `item_list.css` を触るため、
+15 を作り直すと 24 が当たらなくなる）。この場合は末尾に新しいパッチを足す
+（詳細ページの幅を 15 ではなく 37 にしたのはこの理由）。
 
 コミット前には `scripts/validate-patches.py`（改行コードと hunk 行数の検査）も
 通すこと。CI でも実行される。

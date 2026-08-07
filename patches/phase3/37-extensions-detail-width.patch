@@ -1,0 +1,30 @@
+# Patch 37: chrome://extensions の詳細ページが横に見切れるのを直す
+# 拡張機能の「詳細」を開くと、スマホの縦画面では右側が画面外に出て、トグルなどが
+# 触れなかった。横画面にすると収まる。
+#
+#   .page-content { width: var(--cr-toolbar-field-width); }   /* 固定幅 */
+#
+# 画面がこの幅より狭いと、そのままはみ出す。収まらないときだけ縮むようにした。
+#
+# .page-content は詳細ページ専用ではなく、サイト権限やアクティビティログでも
+# 使われているので、まとめて直る。
+#
+# Patch 15 (chrome://extensions のスマホ対応) に含めたいところだが、あちらの
+# 担当ファイル item_list.css は Patch 24 も触っており、15 を作り直すと 24 が
+# 当たらなくなる。そのため別パッチにしてある。
+diff --git a/chrome/browser/resources/extensions/shared_style.css b/chrome/browser/resources/extensions/shared_style.css
+index d1ec505..35b1126 100644
+--- a/chrome/browser/resources/extensions/shared_style.css
++++ b/chrome/browser/resources/extensions/shared_style.css
+@@ -68,7 +68,10 @@ a[href] {
+   margin: auto;
+   min-height: 100%;
+   padding-bottom: 64px;
+-  width: var(--cr-toolbar-field-width);
++  /* mobile-bex: 固定幅だと、画面がそれより狭いスマホで横が見切れる（詳細ページ、
++     サイト権限、アクティビティログなど .page-content を使う画面すべて）。
++     画面に収まらないときだけ縮める。 */
++  width: min(var(--cr-toolbar-field-width), 100%);
+ }
+ 
+ .page-header {

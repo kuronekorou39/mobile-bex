@@ -112,3 +112,41 @@ GetActionModelForId(action_id)->ExecuteUserAction(source);
 **対処**: 両方に null チェックを入れ、`GetAction()` は宣言どおり null を返す
 ようにした。併せて Java 側でも、ツールバーがまだ把握していない ID は
 `onActionsInitialized` まで実行を保留するようにした（Patch 35）。
+
+## 6. シークレットのウィンドウに拡張機能用の controller が付かない
+
+**症状**: 「シークレット モードでの実行を許可する」を付けた拡張機能が、
+シークレットモードで壊れる。`chrome.tabs.query()` を呼ぶとブラウザごと落ち、
+「現在のウィンドウ」を要求する API は `No current window` を返す。
+
+```
+[FATAL:chrome/browser/extensions/api/tabs/tabs_api.cc:1716]
+Check failed: window_controller.
+```
+
+コンテンツスクリプトとタブ操作だけで完結する拡張機能は影響を受けないため、
+「動くものと動かないものがある」という形で現れる。
+
+**原因**: `ChromeActivity` は起動時のプロファイル1つ分しか
+`ExtensionWindowControllerBridge` を登録しない。
+
+```java
+// TODO(crbug.com/475200706): Handle multiple profiles for mobile.
+Profile profile = tabModelSelector.getCurrentModel().getProfile();
+```
+
+一方 `ChromeAndroidTaskImpl` は、シークレットのタブモデルが出来ると、そのために
+別の `BrowserWindow` を作る。結果、片方だけ controller を持たないウィンドウが
+できる。上流のコードはこの状態を想定していない。
+
+- `tabs_api.cc` は `CHECK(window_controller)` でプロセスを落とす
+- `chrome_extension_function_details.cc` の「現在のウィンドウ」探索は、
+  プロファイルが一致した時点で、controller が null でも探索を打ち切る。
+  通常ウィンドウという答えがあるのに辿り着かない
+
+**対処**: シークレットのプロファイルにも controller を登録する。加えて上流側の
+2箇所も、controller を持たないウィンドウがあっても壊れないようにした（Patch 36）。
+
+後者を残すのは、シークレットのタブを全部閉じるとプロファイルと controller は
+消えるのに、ウィンドウはアクティビティ終了まで残るため。`ChromeAndroidTaskImpl` に
+その旨のコメント（crbug.com/479566813）があり、上流も未解決と認識している。

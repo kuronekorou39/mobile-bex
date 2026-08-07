@@ -1,0 +1,139 @@
+# Patch 36: シークレットモードで拡張機能を動くようにする
+# 「シークレット モードでの実行を許可する」を付けた拡張機能が、シークレットでは
+# 壊れていた。chrome.tabs.query() を呼ぶとブラウザごと落ち、「現在のウィンドウ」を
+# 要求する API は "No current window" を返していた。原因は同じで、シークレット用の
+# ブラウザウィンドウに拡張機能用の window controller が付いていないこと。
+#
+# ChromeActivity は起動時のプロファイル1つ分しか登録していない (上流に
+# 「TODO(crbug.com/475200706): Handle multiple profiles for mobile」がある)。
+# 一方 ChromeAndroidTaskImpl は、シークレットのタブモデルが出来ると、そのために
+# 別の BrowserWindow を作る。この片方だけに controller が無い状態になっていた。
+#
+# 登録先は IncognitoTabModel 自身の観測者リストであることに注意。
+# TabModelSelector#addIncognitoTabModelObserver() は別のリストで、そちらは
+# wasFirstTabCreated / didBecomeEmpty しか呼ばない。最初これを間違えて、
+# 登録が一度も走らないまま「直った」と誤認した。
+#
+# 併せて上流の壊れ方を2つ直す。どちらも「controller が無いウィンドウ」を
+# 想定していないもの (docs/upstream-issues.md の 6 を参照)。
+#
+#   - tabs_api.cc の CHECK(window_controller) でプロセスを落としていた。
+#     該当しないウィンドウとして飛ばす。
+#   - chrome_extension_function_details.cc の「現在のウィンドウ」探索が、
+#     プロファイルが一致した時点で controller が null でも打ち切っていた。
+#     null なら次のウィンドウを見る。
+#
+# 後者が要るのは、シークレットのタブを全部閉じるとプロファイルと controller は
+# 消えるのに、ウィンドウはアクティビティ終了まで残るため (ChromeAndroidTaskImpl に
+# crbug.com/479566813 のコメントがある)。その隙間でも通常ウィンドウに落ちる。
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java
+index 4af89b1..544f0ec 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java
+@@ -182,6 +182,8 @@ import org.chromium.chrome.browser.tab.TabSelectionType;
+ import org.chromium.chrome.browser.tab.TabState;
+ import org.chromium.chrome.browser.tab.TabUtils;
+ import org.chromium.chrome.browser.tab_ui.TabContentManager;
++import org.chromium.chrome.browser.tabmodel.IncognitoTabModel;
++import org.chromium.chrome.browser.tabmodel.IncognitoTabModelObserver;
+ import org.chromium.chrome.browser.tabmodel.SupportedProfileType;
+ import org.chromium.chrome.browser.tabmodel.TabCreator;
+ import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
+@@ -1093,17 +1095,51 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
+             // TODO(crbug.com/475200706): Handle multiple profiles for mobile.
+             Profile profile = tabModelSelector.getCurrentModel().getProfile();
+             assert profile != null;
+-            chromeAndroidTask.addFeature(
+-                    new ChromeAndroidTaskFeatureKey(ExtensionWindowControllerBridge.class, profile),
+-                    () ->
+-                            ExtensionWindowControllerBridgeFactory.create(
+-                                    chromeAndroidTask, profile));
++            addExtensionWindowControllerBridge(chromeAndroidTask, profile);
++
++            // mobile-bex: シークレットのタブモデルには別の BrowserWindow が作られる
++            // (ChromeAndroidTaskImpl#associateTabModelWithBrowserWindow)。そちらにも
++            // window controller を付ける。付けないと、シークレットモードで動くことを
++            // 許可した拡張機能が壊れる。chrome.tabs.query() ではブラウザごと落ち
++            // (tabs_api.cc の CHECK(window_controller))、「現在のウィンドウ」を要求する
++            // API は "No current window" を返す。後者は、ウィンドウを探す繰り返しが
++            // プロファイルの一致だけで打ち切るため (chrome_extension_function_details.cc)。
++            //
++            // 登録先は IncognitoTabModel 自身の観測者リスト。TabModelSelector の
++            // addIncognitoTabModelObserver() は別のリストで、そちらは
++            // wasFirstTabCreated / didBecomeEmpty しか呼ばない。
++            var incognitoTabModel =
++                    (IncognitoTabModel) tabModelSelector.getModel(/* incognito= */ true);
++            if (incognitoTabModel.getProfile() != null) {
++                // 既にシークレットのタブが復元されている場合。以降の通知は来ない。
++                addExtensionWindowControllerBridge(
++                        chromeAndroidTask, incognitoTabModel.getProfile());
++            }
++            incognitoTabModel.addIncognitoObserver(
++                    new IncognitoTabModelObserver() {
++                        @Override
++                        public void onIncognitoModelCreated() {
++                            // ChromeAndroidTask 自身の観測者が先に登録されているので、
++                            // ここに来た時点で BrowserWindow は出来ている。
++                            Profile incognitoProfile = incognitoTabModel.getProfile();
++                            if (incognitoProfile == null) return;
++                            addExtensionWindowControllerBridge(
++                                    chromeAndroidTask, incognitoProfile);
++                        }
++                    });
+ 
+             // 5. Make the ChromeAndroidTask available via OneshotSupplier.
+             mChromeAndroidTaskSupplier.set(chromeAndroidTask);
+         }
+     }
+ 
++    private static void addExtensionWindowControllerBridge(
++            ChromeAndroidTask chromeAndroidTask, Profile profile) {
++        chromeAndroidTask.addFeature(
++                new ChromeAndroidTaskFeatureKey(ExtensionWindowControllerBridge.class, profile),
++                () -> ExtensionWindowControllerBridgeFactory.create(chromeAndroidTask, profile));
++    }
++
+     /** Returns an {@link OneshotSupplier} for {@link ChromeAndroidTask}. */
+     protected final OneshotSupplier<ChromeAndroidTask> getChromeAndroidTaskSupplier() {
+         return mChromeAndroidTaskSupplier;
+diff --git a/chrome/browser/extensions/api/tabs/tabs_api.cc b/chrome/browser/extensions/api/tabs/tabs_api.cc
+index 2d26f28..a6ac014 100644
+--- a/chrome/browser/extensions/api/tabs/tabs_api.cc
++++ b/chrome/browser/extensions/api/tabs/tabs_api.cc
+@@ -1713,7 +1713,15 @@ bool TabsQueryFunction::MatchesWindow(
+ 
+   WindowController* window_controller =
+       BrowserExtensionWindowController::From(candidate_browser);
+-  CHECK(window_controller);
++  // mobile-bex: on desktop Android a BrowserWindow can outlive its controller.
++  // The controller is a ChromeAndroidTask feature keyed by profile, so closing
++  // all incognito tabs drops it, while the window itself is kept until the
++  // activity goes away (see the crbug.com/479566813 comment in
++  // ChromeAndroidTaskImpl). Treat such a window as not matching rather than
++  // taking the browser down with a CHECK.
++  if (!window_controller) {
++    return false;
++  }
+   if (!window_controller->IsVisibleToTabsAPIForExtension(
+           extension(), /*include_dev_tools_windows=*/false)) {
+     return false;
+diff --git a/chrome/browser/extensions/chrome_extension_function_details.cc b/chrome/browser/extensions/chrome_extension_function_details.cc
+index 9cfacb4..fcddbdb 100644
+--- a/chrome/browser/extensions/chrome_extension_function_details.cc
++++ b/chrome/browser/extensions/chrome_extension_function_details.cc
+@@ -64,7 +64,14 @@ WindowController* ChromeExtensionFunctionDetails::GetCurrentWindowController()
+             (function_->include_incognito_information() &&
+              browser->GetProfile()->GetOriginalProfile() == profile)) {
+           window_controller = BrowserExtensionWindowController::From(browser);
+-          return false;  // Stop iterating.
++          // mobile-bex: giving up here on a window that has no controller
++          // makes the whole lookup fail, and the extension sees
++          // "No current window". On desktop Android every window used to
++          // have one, but the incognito window's controller is tied to the
++          // incognito profile and goes away with it. Keep looking instead.
++          if (window_controller) {
++            return false;  // Stop iterating.
++          }
+         }
+         return true;  // Continue iterating.
+       });

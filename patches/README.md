@@ -8,7 +8,7 @@ Chromium Android に拡張機能サポートを追加するためのパッチ群
 patches/
 ├── phase1/    # 空: PoC はパッチ不要だった（下記参照）
 ├── phase2/    # 空: API 検証もパッチ不要だった
-└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜37）
+└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜40）
 ```
 
 ## Phase 1 / Phase 2 について
@@ -62,6 +62,8 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 36 | `36-incognito-extensions.patch` | シークレットモードで拡張機能を動くようにする（落ちる／「現在のウィンドウなし」を解消） |
 | 37 | `37-extensions-detail-width.patch` | chrome://extensions の詳細ページが横に見切れるのを直す |
 | 38 | `38-allow-audio-capture.patch` | 画面録画に音が入るようにする（`allowAudioPlaybackCapture`） |
+| 39 | `39-custom-tab-open-in-app-crash.patch` | 他アプリからのリンク（Custom Tab）が「繰り返し終了」で開けないのを直す（29 の副作用） |
+| 40 | `40-pdf-fragment-restore-crash.patch` | PDF タブを開いたまま再起動すると落ちるのを直す（上流バグ: Fragment の引数なしコンストラクタ） |
 
 ### 欠番について
 
@@ -96,7 +98,7 @@ out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
 # Phase 3 パッチを適用（デフォルト。phase1/2 は空なのでスキップされる）
 ./scripts/apply-patches.sh
 
-# パッチを元に戻す（37→01 の逆順で剥がされる）
+# パッチを元に戻す（40→01 の逆順で剥がされる）
 ./scripts/apply-patches.sh --reverse
 ```
 

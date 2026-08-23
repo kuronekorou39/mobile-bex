@@ -150,3 +150,28 @@ Profile profile = tabModelSelector.getCurrentModel().getProfile();
 後者を残すのは、シークレットのタブを全部閉じるとプロファイルと controller は
 消えるのに、ウィンドウはアクティビティ終了まで残るため。`ChromeAndroidTaskImpl` に
 その旨のコメント（crbug.com/479566813）があり、上流も未解決と認識している。
+
+## 7. PDF の Fragment が Activity の状態復元で作り直せない
+
+**症状**: PDF を開いたタブがある状態でバックグラウンドに回し、プロセスが落ちた後に
+戻ると、`ChromeTabbedActivity` が起動できずに落ちる。PDF のタブを閉じない限り
+毎回同じ場所で落ちるので、「繰り返し終了している」の表示になる。
+
+```
+Caused by: androidx.fragment.app.Fragment$InstantiationException: Unable to instantiate
+  fragment org.chromium.chrome.browser.pdf.PdfCoordinator$ChromePdfViewerFragment:
+  could not find Fragment constructor
+Caused by: java.lang.NoSuchMethodException: ...ChromePdfViewerFragment.<init> []
+```
+
+**原因**: `FragmentManager` は Activity の再生成時に、保存されていた Fragment を
+引数なしコンストラクタで作り直す（`FragmentActivity.onCreate` →
+`restoreSaveStateInternal`）。`ChromePdfViewerFragment` には委譲先を受け取る
+コンストラクタしか無く、ここで例外になる。`PdfCoordinator` には「復元された
+Fragment をタグで見つけて捨てる」処理が既にあるが、その手前で落ちていた。
+上流 main では引数なしコンストラクタが追加されている（さらに Fragment の再利用まで
+実装されているが、こちらには取り込んでいない）。
+
+**対処**: 引数なしコンストラクタを足し、委譲先が無い間のリンククリックは無視する
+（Patch 40）。`chrome/android/proguard/main.flags` が Fragment 派生の引数なし
+コンストラクタを keep しているので、R8 で消えることはない。

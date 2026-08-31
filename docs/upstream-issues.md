@@ -175,3 +175,25 @@ Fragment をタグで見つけて捨てる」処理が既にあるが、その�
 **対処**: 引数なしコンストラクタを足し、委譲先が無い間のリンククリックは無視する
 （Patch 40）。`chrome/android/proguard/main.flags` が Fragment 派生の引数なし
 コンストラクタを keep しているので、R8 で消えることはない。
+
+## 8. 開発中の実験機能が全部有効になっている（testing config）
+
+**症状**: アドレスバーに URL を貼り付けると「リンクのボタン」のような表示になり、
+URL を編集できない。製品版の Chrome にはこの UI が無い。
+
+**原因**: 実験機能 `OmniboxMultimodalInput`（コード名 Fusebox。AI モード用に画像や
+タブを「添付」できる入力欄）が有効になっていた。上流の既定は無効
+（`components/omnibox/common/omnibox_features.cc`）。
+
+有効になっていたのはビルド構成のため。`is_chrome_branded = false` の Android ビルドは
+`testing/variations/fieldtrial_testing_config.json` を組み込む
+（`components/variations/service/BUILD.gn` の `fieldtrial_testing_enabled`）。これは CI 用に
+開発中の実験をまとめて有効にする設定で、**Android 向けだけで 604 スタディ・748 機能**を
+有効にする。製品版 Chrome はこの設定を積まないので、これらの UI は出ない。
+
+**対処**: この実験だけを testing config から外した（Patch 41）。
+
+> [!NOTE]
+> 同じ理由で、他にも上流の未完成な機能が有効になっている可能性がある。まとめて切るなら
+> `args.gn` に `disable_fieldtrial_testing_config = true` を入れる（製品版 Chrome の既定に
+> 揃う）。影響範囲が広く、全体のスモークテストが要るため、今は個別に外す方針にしている。

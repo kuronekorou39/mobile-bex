@@ -1,0 +1,37 @@
+# Patch 42: アドレスバーで長い URL を折り返して編集できるようにする
+# URL を貼り付けた後にドメインだけ直したいとき、1行の横スクロールなので先頭まで
+# スクロールして戻る必要があった。
+#
+# 上流にも複数行編集 (OmniboxMultilineEditField、既定で有効) はあり、フォーカス中は
+# setSingleLine(false) + maxLines=5、ツールバーも WRAP_CONTENT で縦に伸びる。
+# ただし折り返すかどうかの判定が
+#
+#   setInputIsMultilineEligible(TextUtils.indexOf(text, ' ') >= 0)
+#     ... AutocompleteInputConnection#setAutocompleteSpan
+#
+# 「入力に空白があるか」= 検索語かどうか、になっている。URL には空白が無いので
+# 常に横スクロールの1行のままだった。
+#
+# 編集中は中身によらず折り返すようにする。ブラウザとしては URL を扱う時間のほうが
+# 長く、折り返したほうが目的の位置を直接タップできる。
+#
+# 副作用: URL を打っている最中も行が増減するので、ツールバーの高さが変わる
+# (上流の WRAP_CONTENT の作りに乗っているだけで、追加の実装はしていない)。
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
+index 5b54e5e..7a628c1 100644
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
+@@ -475,7 +475,12 @@ public class UrlBar extends AutocompleteEditText {
+ 
+     @Override
+     public void setInputIsMultilineEligible(boolean isMultilineEligible) {
+-        isMultilineEligible &= mFocused;
++        // mobile-bex: 上流は「入力に空白があるか」(= 検索語か) で折り返すかを決めている
++        // (AutocompleteInputConnection#setAutocompleteSpan)。URL には空白が無いので常に
++        // 1行の横スクロールになり、貼り付けた URL のドメインを直すのに先頭まで戻る操作が
++        // 必要だった。編集中は中身によらず折り返す (最大行数は MULTILINE_EDIT_MAX_LINES、
++        // ツールバー側は既に WRAP_CONTENT で伸びるようになっている)。
++        isMultilineEligible = mFocused;
+         if (OmniboxFeatures.allowMultilineEditField() && !mIsInCct) {
+             setHorizontallyScrolling(!isMultilineEligible);
+         }

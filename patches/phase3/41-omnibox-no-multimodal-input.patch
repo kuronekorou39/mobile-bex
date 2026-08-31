@@ -1,0 +1,52 @@
+# Patch 41: アドレスバーを普通の編集できる形に戻す (実験中の Fusebox を無効化)
+# URL をコピーして貼り付けると「リンクのボタン」のような表示になり、URL の一部を
+# 直して開き直す、という当たり前の操作ができなくなっていた。
+#
+# 原因は自分たちのパッチではなく、Chromium の実験機能
+# OmniboxMultimodalInput (通称 Fusebox。AI モード用に画像やタブを「添付」できる
+# 入力欄) が、このビルドで有効になっていたこと。有効だと LocationBarCoordinator と
+# FuseboxCoordinator がアドレスバーを添付付きの入力パネルに差し替える
+# (「+」ボタンやマイクが下に付く形)。上流の既定は無効
+# (components/omnibox/common/omnibox_features.cc の kOmniboxMultimodalInput)。
+#
+# なぜ有効になっていたか: is_chrome_branded = false の Android ビルドは
+# testing/variations/fieldtrial_testing_config.json (CI 用に開発中の実験を
+# まとめて有効にする設定) を組み込む。この中に OmniboxMultimodalInput の
+# 「Enabled」実験があった。Chrome 製品版はこの設定を積まないので、この UI は出ない。
+#
+# 対処: この実験だけを testing config から外す。同じ実験が抱き合わせで有効に
+# していた OmniboxMultilineEditField と ComposeboxUsesChromeComposeClient は
+# どちらも C++ 側の既定が ENABLED なので、外しても状態は変わらない。
+#
+# 注: この testing config は Android 向けだけで 604 実験 (748 機能) を有効に
+# している。ブラウザとして安定させるなら、args.gn に
+# disable_fieldtrial_testing_config = true を入れて丸ごと切る手もある
+# (製品版 Chrome の既定に揃う)。影響範囲が広いので、そちらは別途判断する。
+diff --git a/testing/variations/fieldtrial_testing_config.json b/testing/variations/fieldtrial_testing_config.json
+index 66c586f..89d8832 100644
+--- a/testing/variations/fieldtrial_testing_config.json
++++ b/testing/variations/fieldtrial_testing_config.json
+@@ -18317,23 +18317,6 @@
+             ]
+         }
+     ],
+-    "OmniboxMultimodalInput": [
+-        {
+-            "platforms": [
+-                "android"
+-            ],
+-            "experiments": [
+-                {
+-                    "name": "Enabled",
+-                    "enable_features": [
+-                        "ComposeboxUsesChromeComposeClient",
+-                        "OmniboxMultilineEditField",
+-                        "OmniboxMultimodalInput"
+-                    ]
+-                }
+-            ]
+-        }
+-    ],
+     "OmniboxOnDeviceBrainModel": [
+         {
+             "platforms": [

@@ -1,0 +1,108 @@
+# Patch 43: 三点メニューに「ハードリロード」を追加
+# PC の Ctrl+Shift+R に当たる操作が、スマホには入口が無かった。キャッシュが残って
+# 古いページが出たとき、履歴の削除まで行かないと直せない状態だった。
+#
+# 中身は上流の Tab#reloadIgnoringCache() をそのまま呼ぶだけ。キーボードからは
+# 上流も既に対応している (KeyboardShortcuts の RELOAD_TAB_BYPASSING_CACHE =
+# Ctrl+Shift+R)。足りなかったのはタッチからの入口だけなので、メニュー項目を足す。
+#
+# 置き場所は Patch 27 で追加した「小窓表示」と同じ BEX 独自グループ (メニュー最上部、
+# 以降とはセパレータで区切る)。セパレータの id は 27 で足した bex_pip_divider_line_id
+# をそのまま使う (グループ全体の区切りとして機能するため、増やさない)。
+# chrome:// や新しいタブでは意味がないので、ページを開いているときだけ出す。
+# ラベルは短くした。「キャッシュを無視して再読み込み」だとメニューの幅に収まらず
+# 「キャッシュを無視して再…」と切れたため (実機で確認)。
+#
+# 注意: これはキャッシュを無視するだけで、Cookie やサイトのデータは消えない
+# (PC の Ctrl+Shift+R も同じ)。特定サイトの Cookie を消したい場合は
+# メニューの (i) → 「Cookie とサイトデータ」から削除する。
+diff --git a/chrome/android/java/res/values/ids.xml b/chrome/android/java/res/values/ids.xml
+index 862ed12..b217684 100644
+--- a/chrome/android/java/res/values/ids.xml
++++ b/chrome/android/java/res/values/ids.xml
+@@ -135,6 +135,7 @@ found in the LICENSE file.
+     <item type="id" name="update_menu_id" />
+     <item type="id" name="new_tab_menu_id" />
+     <item type="id" name="bex_pip_menu_id" />
++    <item type="id" name="bex_hard_reload_menu_id" />
+     <item type="id" name="bex_pip_divider_line_id" />
+     <item type="id" name="new_incognito_tab_menu_id" />
+     <item type="id" name="add_to_group_menu_id" />
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+index c9d385c..d7fe747 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -4070,6 +4070,14 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+         } else if (id == R.id.bex_pip_menu_id) {
+             enterPictureInPictureFromMenu();
+             RecordUserAction.record("MobileMenuBexPip");
++        } else if (id == R.id.bex_hard_reload_menu_id) {
++            // mobile-bex: PC の Ctrl+Shift+R と同じ、キャッシュを無視した再読み込み。
++            // キーボードでは上流も対応済み (KeyboardShortcuts の RELOAD_TAB_BYPASSING_CACHE)
++            // だが、タッチからの入口が無かった。
++            if (currentTab != null) {
++                currentTab.reloadIgnoringCache();
++                RecordUserAction.record("MobileMenuBexHardReload");
++            }
+         } else if (id == R.id.extensions_menu_id) {
+             LoadUrlParams params =
+                     new LoadUrlParams(
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+index 9e415cf..caedd11 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+@@ -247,10 +247,20 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+                             buildModelForIconRow(R.id.icon_row_menu_id, iconModels)));
+         }
+ 
+-        // 小窓表示 (picture-in-picture)。目立たせたいのでメニューの最上部に置き、
+-        // 以降の項目とはセパレータで区切る。
+-        if (shouldShowPipItem()) {
++        // BEX 独自の項目。目立たせたいのでメニューの最上部に置き、以降の項目とは
++        // セパレータで区切る。
++        // - 小窓表示 (picture-in-picture)
++        // - キャッシュを無視して再読み込み (PC の Ctrl+Shift+R 相当)。ページを開いて
++        //   いるときだけ出す (chrome:// や新しいタブでは意味がないため)。
++        boolean showPipItem = shouldShowPipItem();
++        boolean showHardReloadItem = currentTab != null && !isNativePage;
++        if (showPipItem) {
+             modelList.add(buildPipItem());
++        }
++        if (showHardReloadItem) {
++            modelList.add(buildHardReloadItem());
++        }
++        if (showPipItem || showHardReloadItem) {
+             modelList.add(
+                     new MVCListAdapter.ListItem(
+                             AppMenuHandler.AppMenuItemType.DIVIDER,
+@@ -711,6 +721,16 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+                         R.id.bex_pip_menu_id, R.string.bex_menu_pip, /* iconResId= */ 0));
+     }
+ 
++    /** mobile-bex: キャッシュを無視して再読み込みする項目 (PC の Ctrl+Shift+R 相当)。 */
++    private MVCListAdapter.ListItem buildHardReloadItem() {
++        return new MVCListAdapter.ListItem(
++                AppMenuHandler.AppMenuItemType.STANDARD,
++                buildModelForStandardMenuItem(
++                        R.id.bex_hard_reload_menu_id,
++                        R.string.bex_menu_hard_reload,
++                        /* iconResId= */ 0));
++    }
++
+     private boolean shouldShowExtensionsItem() {
+         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
+         return ExtensionUi.isEnabled(getProfileFromTabModel());
+diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+index 94ffeaf..4fe3f3c 100644
+--- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
++++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+@@ -4317,6 +4317,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+       <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
+         小窓表示
+       </message>
++      <message name="IDS_BEX_MENU_HARD_RELOAD" desc="Menu item that reloads the page while bypassing the HTTP cache, the equivalent of Ctrl+Shift+R on desktop.">
++        ハードリロード
++      </message>
+       <message name="IDS_BEX_APPLICATION_VERSION_SUMMARY" desc="Version shown in settings. The first placeholder is this browser's own version, the second is the Chromium version it is built from.">
+         <ph name="BEX_VERSION">%1$s<ex>0.1.9</ex></ph>（Chromium <ph name="CHROMIUM_VERSION">%2$s<ex>147.0.7692.0</ex></ph>）
+       </message>

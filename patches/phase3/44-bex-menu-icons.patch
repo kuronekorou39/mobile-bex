@@ -1,0 +1,42 @@
+# Patch 44: 「小窓表示」「ハードリロード」にアイコンを付けて、他の項目と行頭を揃える
+# この2つだけ1行ぶん字下げされたように見えていた。
+#
+# TabbedAppMenuPropertiesDelegate#shouldShowIconBeforeItem() は true で、この画面の
+# 項目はすべて左端にアイコンが付く。BEX で足した2つは iconResId = 0 だったため、
+# アイコンの幅 (実測で約 90px) だけ文字が右にずれ、行頭が揃っていなかった。
+#
+#   他の項目   x=435 からアイコン → 文字
+#   BEX の2つ  x=526 から文字     ← ここがずれて見える原因
+#
+# アイコンは上流にあるものを使う。
+#   小窓表示        picture_in_picture_24px (chrome の AutoPipPermissionDialogView と同じもの)
+#   ハードリロード  btn_toolbar_reload      (ツールバーの再読み込みと同じ矢印。RTL 版の別名あり)
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+index caedd11..57096d2 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+@@ -718,7 +718,12 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+         return new MVCListAdapter.ListItem(
+                 AppMenuHandler.AppMenuItemType.STANDARD,
+                 buildModelForStandardMenuItem(
+-                        R.id.bex_pip_menu_id, R.string.bex_menu_pip, /* iconResId= */ 0));
++                        R.id.bex_pip_menu_id,
++                        R.string.bex_menu_pip,
++                        // mobile-bex: この画面は shouldShowIconBeforeItem() が true で、
++                        // 他の項目は全部アイコン付き。アイコンを 0 にすると文字だけが
++                        // アイコンの幅ぶん右にずれて、1行だけ字下げされたように見える。
++                        shouldShowIconBeforeItem() ? R.drawable.picture_in_picture_24px : 0));
+     }
+ 
+     /** mobile-bex: キャッシュを無視して再読み込みする項目 (PC の Ctrl+Shift+R 相当)。 */
+@@ -728,7 +733,9 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+                 buildModelForStandardMenuItem(
+                         R.id.bex_hard_reload_menu_id,
+                         R.string.bex_menu_hard_reload,
+-                        /* iconResId= */ 0));
++                        // btn_toolbar_reload はツールバーの再読み込みと同じ矢印
++                        // (RTL 用に左右反転した版が values-ldrtl にある別名)。
++                        shouldShowIconBeforeItem() ? R.drawable.btn_toolbar_reload : 0));
+     }
+ 
+     private boolean shouldShowExtensionsItem() {

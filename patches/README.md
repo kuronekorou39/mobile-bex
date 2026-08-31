@@ -8,7 +8,7 @@ Chromium Android に拡張機能サポートを追加するためのパッチ群
 patches/
 ├── phase1/    # 空: PoC はパッチ不要だった（下記参照）
 ├── phase2/    # 空: API 検証もパッチ不要だった
-└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜44）
+└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜45）
 ```
 
 ## Phase 1 / Phase 2 について
@@ -68,6 +68,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 42 | `42-omnibox-wrap-url.patch` | 長い URL をアドレスバーで折り返して編集できるようにする |
 | 43 | `43-hard-reload-menu.patch` | 三点メニューに「ハードリロード」（キャッシュを無視して再読み込み）を追加 |
 | 44 | `44-bex-menu-icons.patch` | 「小窓表示」「ハードリロード」にアイコンを付け、他の項目と行頭を揃える |
+| 45 | `45-update-menu-product-name.patch` | 更新の案内の製品名を BEX にする（「Chrome を更新」→「BEX を更新」） |
 
 ### 欠番について
 
@@ -102,7 +103,7 @@ out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
 # Phase 3 パッチを適用（デフォルト。phase1/2 は空なのでスキップされる）
 ./scripts/apply-patches.sh
 
-# パッチを元に戻す（44→01 の逆順で剥がされる）
+# パッチを元に戻す（45→01 の逆順で剥がされる）
 ./scripts/apply-patches.sh --reverse
 ```
 

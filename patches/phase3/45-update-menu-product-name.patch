@@ -1,0 +1,51 @@
+# Patch 45: 更新の案内に出る製品名を BEX にする
+# 新しいリリースがあるとき、三点メニューに「Chrome を更新」と出ていた。更新先は
+# GitHub にある BEX の APK (Patch 34) なので、Chrome と書かれているのは誤り。
+#
+# Patch 33 (UI 中の製品名を BEX にする) の取りこぼし。あちらは設定・通知・拡張機能の
+# ダイアログを直したが、更新まわりの文字列が残っていた。
+#
+# 直し方も Patch 33 と同じで、grd の原文そのものを置き換える。原文を変えると
+# メッセージ ID が変わって .xtb の訳が引かれなくなり、原文がそのまま表示される
+# (日本語で書いておけば日本語で出る)。
+#
+#   IDS_MENU_UPDATE              Update Chrome    → BEX を更新
+#   IDS_MENU_UPDATE_UNSUPPORTED  Chrome can't update → BEX を更新できません
+#   IDS_ACCESSIBILITY_TOOLBAR_BTN_MENU_OS_VERSION_UNSUPPORTED
+#                                Chrome can't update. More options
+#                                → BEX を更新できません。その他のオプション
+#                                (ツールバーのメニューボタンの読み上げ用)
+#
+# 併記される説明 (IDS_MENU_UPDATE_SUMMARY_DEFAULT =「新しいバージョンをご利用
+# いただけます」) は Chrome と言っていないので触らない。触ると訳が外れて英語になる。
+#
+# 注意: これらは Safety Hub の更新カードでも使われる。そちらも BEX 表記になる。
+diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+index 4fe3f3c..f020ebf 100644
+--- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
++++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+@@ -4243,13 +4243,13 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+ 
+       <!-- Main menu items -->
+       <message name="IDS_MENU_UPDATE" desc="Menu item for updating chrome. [CHAR_LIMIT=24]">
+-        Update Chrome
++        BEX を更新
+       </message>
+       <message name="IDS_MENU_UPDATE_SUMMARY_DEFAULT" desc="Summary string for update menu item explaining that a newer version of Chrome is available. [CHAR_LIMIT=30]">
+         Newer version is available
+       </message>
+       <message name="IDS_MENU_UPDATE_UNSUPPORTED" desc="Menu item for when Chrome can not be updated. [CHAR_LIMIT=24]">
+-        Chrome can’t update
++        BEX を更新できません
+       </message>
+       <message name="IDS_MENU_UPDATE_UNSUPPORTED_SUMMARY_DEFAULT" desc="Summary string for update menu item explaining that the Android version on the device is unsupported. [CHAR_LIMIT=30]">
+         Android version is unsupported
+@@ -4953,7 +4953,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+         Update available. More options
+       </message>
+       <message name="IDS_ACCESSIBILITY_TOOLBAR_BTN_MENU_OS_VERSION_UNSUPPORTED" desc="Content description for the menu button when it is covered by the warning icon that is displayed when the current Android OS version is unsupported.">
+-        Chrome can’t update. More options
++        BEX を更新できません。その他のオプション
+       </message>
+       <message name="IDS_ACCESSIBILITY_TOOLBAR_BTN_MIC" desc="Content description for the voice search button.">
+         Start voice search

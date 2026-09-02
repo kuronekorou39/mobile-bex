@@ -4,29 +4,16 @@
 # 「おすすめの記事を更新できません」というエラーだけが残る。
 # フィードは pref なので、ユーザーが設定から表示に戻すことは引き続き可能。
 diff --git a/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java b/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java
-index 7fc5b6a..9c06fbe 100644
+index a200842..683bcab 100644
 --- a/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java
 +++ b/chrome/browser/composeplate/android/java/src/org/chromium/chrome/browser/composeplate/ComposeplateUtils.java
-@@ -21,7 +21,6 @@ import org.jni_zero.NativeMethods;
- import org.chromium.base.ResettersForTesting;
- import org.chromium.build.annotations.NullMarked;
- import org.chromium.build.annotations.Nullable;
--import org.chromium.chrome.browser.flags.ChromeFeatureList;
- import org.chromium.chrome.browser.profiles.Profile;
- import org.chromium.chrome.browser.theme.ThemeUtils;
- import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
-@@ -40,12 +39,10 @@ public class ComposeplateUtils {
-      */
-     public static boolean isComposeplateEnabled(boolean isTablet, Profile profile) {
-         if (sIsEnabledForTesting) return true;
--        if (!ComposeplateUtilsJni.get().isAimEntrypointEligible(profile)) return false;
+@@ -42,7 +42,9 @@ public class ComposeplateUtils {
+             return sIsEnabledForTesting;
+         }
  
--        if (!isTablet) return true;
--
--        return ChromeFeatureList.sAndroidComposeplateLFF.isEnabled()
--                && ComposeplateUtilsJni.get().isAimEntrypointLFFEligible(profile);
-+        // mobile-bex: 新規タブの「AI モード」ボタンは Google アカウント連携を前提と
-+        // しており、自前ビルドでは押しても機能しない。使えない導線は出さない。
+-        return ComposeplateUtilsJni.get().isAimEntrypointEligible(profile);
++        // mobile-bex: 新規タブの「AI モード」ボタンは Google アカウント連携が前提で、
++        // 自前ビルドでは押しても機能しない。使えない導線は出さない。
 +        return false;
      }
  

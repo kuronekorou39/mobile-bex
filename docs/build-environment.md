@@ -46,10 +46,18 @@ gclient runhooks
 
 ### 特定バージョンのチェックアウト
 
+このチェックアウトは shallow（履歴1コミット）なので、タグを取るときは**そのタグだけを
+depth=1 で取る**こと。`--with_tags` を付けて `gclient sync` すると全タグを取りに行き、
+20GB 超の無駄なダウンロードになる（実際にやってしまった）。
+
 ```bash
-git checkout tags/147.0.7692.0
-gclient sync
+git fetch --depth=1 origin refs/tags/153.0.8010.18:refs/tags/153.0.8010.18
+git checkout --detach 153.0.8010.18
+gclient sync -D
 ```
+
+依存の取得で HTTP 429（レート制限）に当たることがある。少し置いて
+`gclient sync -D` をもう一度流せば埋まる。
 
 ## 4. Android SDK/NDK
 
@@ -197,6 +205,7 @@ ccache -M 50G
 
 ## 9. 対象Chromiumバージョン
 
-- **検証実績**: Chromium 147.0.7692.0 (Developer Build)
-- Phase 1〜3 の実機検証はすべてこのバージョン + Pixel 9a / Android 16 で実施
-- パッチもこのバージョンのソースツリーに対して作成・適用している
+- **現在の土台**: Chromium 153.0.8010.18（Android の Stable、2026-08-26）
+- 2026-09 に 147.0.7692.0 から載せ替えた。経緯と、そのとき上流に取り込まれて
+  不要になったパッチは `patches/README.md` の「欠番について」を参照
+- 実機検証は Pixel 9a / Android 17 で実施

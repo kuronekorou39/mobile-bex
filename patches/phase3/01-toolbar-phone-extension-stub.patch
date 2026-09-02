@@ -1,14 +1,22 @@
+# Patch 01: スマホのツールバーに拡張機能用の ViewStub を追加
+# 上流は拡張機能のツールバー (アイコン列・拡張機能メニューボタン・アクセス制御ボタン) を
+# タブレットのレイアウト (toolbar_tablet.xml) にしか置いていない。スマホの
+# toolbar_phone.xml にも同じ id の ViewStub を足して、同じ仕組みに載せる。
+#
+# id は上流に合わせて extensions_toolbar_container_stub (複数形)。ToolbarManager が
+# この id で findViewById して、見つかったときだけ ExtensionsToolbarCoordinator を作る
+# 作りになっているため、名前がずれると何も起きない。
 diff --git a/chrome/browser/ui/android/toolbar/java/res/layout/toolbar_phone.xml b/chrome/browser/ui/android/toolbar/java/res/layout/toolbar_phone.xml
-index 7dd5a613d3..6e1601cedf 100644
+index 9e1f21d..bd35764 100644
 --- a/chrome/browser/ui/android/toolbar/java/res/layout/toolbar_phone.xml
 +++ b/chrome/browser/ui/android/toolbar/java/res/layout/toolbar_phone.xml
-@@ -65,6 +65,12 @@ found in the LICENSE file.
-             android:layout_width="52dp"
-             style="@style/ToolbarHoverableButton"/>
+@@ -74,6 +74,12 @@ found in the LICENSE file.
+             android:layout_height="match_parent"
+             android:visibility="gone"/>
  
 +        <ViewStub
-+            android:id="@+id/extension_toolbar_container_stub"
-+            android:inflatedId="@+id/extension_toolbar_container"
++            android:id="@+id/extensions_toolbar_container_stub"
++            android:inflatedId="@+id/extensions_toolbar_container"
 +            android:layout_width="wrap_content"
 +            android:layout_height="match_parent"/>
 +

@@ -23,10 +23,10 @@
 # disable_fieldtrial_testing_config = true を入れて丸ごと切る手もある
 # (製品版 Chrome の既定に揃う)。影響範囲が広いので、そちらは別途判断する。
 diff --git a/testing/variations/fieldtrial_testing_config.json b/testing/variations/fieldtrial_testing_config.json
-index 66c586f..89d8832 100644
+index a44a0a1..157a777 100644
 --- a/testing/variations/fieldtrial_testing_config.json
 +++ b/testing/variations/fieldtrial_testing_config.json
-@@ -18317,23 +18317,6 @@
+@@ -17959,28 +17959,6 @@
              ]
          }
      ],
@@ -38,9 +38,14 @@ index 66c586f..89d8832 100644
 -            "experiments": [
 -                {
 -                    "name": "Enabled",
+-                    "params": {
+-                        "compact_fusebox": "true",
+-                        "show_bottom_sheet_popup": "true",
+-                        "show_ntp_plus_button": "true",
+-                        "use_ask_hint_for_ntp": "true"
+-                    },
 -                    "enable_features": [
 -                        "ComposeboxUsesChromeComposeClient",
--                        "OmniboxMultilineEditField",
 -                        "OmniboxMultimodalInput"
 -                    ]
 -                }

@@ -2,10 +2,10 @@
 # フォルダ選択後のコピー/検証に時間がかかるが画面に変化がなく、
 # 固まったように見えていたため。点線枠のカード + スピナーを出す。
 diff --git a/chrome/app/extensions_strings.grdp b/chrome/app/extensions_strings.grdp
-index e11300d..9c1bedb 100644
+index 81bbf87..b9b6630 100644
 --- a/chrome/app/extensions_strings.grdp
 +++ b/chrome/app/extensions_strings.grdp
-@@ -547,6 +547,12 @@
+@@ -553,6 +553,12 @@
    <message name="IDS_EXTENSIONS_TOOLBAR_LOAD_UNPACKED_DONE" desc="Text displayed in a toast popup message when extension has been loaded.">
      Extension loaded
    </message>
@@ -18,67 +18,11 @@ index e11300d..9c1bedb 100644
    <message name="IDS_EXTENSIONS_TOOLBAR_PACK" desc="The text displayed in the toolbar to pack an extension directory.">
      Pack extension
    </message>
-diff --git a/chrome/browser/resources/extensions/item_list.css b/chrome/browser/resources/extensions/item_list.css
-index 6abd620..1fecd74 100644
---- a/chrome/browser/resources/extensions/item_list.css
-+++ b/chrome/browser/resources/extensions/item_list.css
-@@ -113,3 +113,51 @@ managed-footnote {
-     max-width: none;
-   }
- }
-+
-+/* mobile-bex: 未パッケージ拡張機能の読み込み中プレースホルダ。
-+ * 拡張機能カードと同じ枠内に点線で表示し、処理中であることを示す。 */
-+#loading-placeholder {
-+  align-items: center;
-+  border: 2px dashed var(--color-side-panel-card-primary-foreground,
-+                        var(--cr-secondary-text-color));
-+  border-radius: var(--cr-card-border-radius, 12px);
-+  box-sizing: border-box;
-+  display: flex;
-+  gap: 16px;
-+  min-height: 80px;
-+  opacity: 0.85;
-+  padding: 20px;
-+}
-+
-+#loading-placeholder .loading-spinner {
-+  animation: bex-spin 900ms linear infinite;
-+  border: 3px solid var(--cr-separator-color, rgba(0, 0, 0, 0.15));
-+  border-radius: 50%;
-+  border-top-color: var(--cr-link-color, #1a73e8);
-+  flex-shrink: 0;
-+  height: 24px;
-+  width: 24px;
-+}
-+
-+@keyframes bex-spin {
-+  to { transform: rotate(360deg); }
-+}
-+
-+#loading-placeholder .loading-title {
-+  color: var(--cr-primary-text-color);
-+  font-size: 100%;
-+  font-weight: 500;
-+}
-+
-+#loading-placeholder .loading-subtitle {
-+  color: var(--cr-secondary-text-color);
-+  font-size: 90%;
-+  margin-top: 4px;
-+}
-+
-+/* 「動きを減らす」設定を尊重する */
-+@media (prefers-reduced-motion: reduce) {
-+  #loading-placeholder .loading-spinner {
-+    animation-duration: 3s;
-+  }
-+}
 diff --git a/chrome/browser/resources/extensions/item_list.html.ts b/chrome/browser/resources/extensions/item_list.html.ts
-index ba7eac7..572ebc2 100644
+index 054f137..664ba27 100644
 --- a/chrome/browser/resources/extensions/item_list.html.ts
 +++ b/chrome/browser/resources/extensions/item_list.html.ts
-@@ -41,6 +41,25 @@ export function getHtml(this: ExtensionsItemListElement) {
+@@ -43,6 +43,25 @@ export function getHtml(this: ExtensionsItemListElement) {
        <span>$i18n{noSearchResults}</span>
      </div>
  
@@ -105,10 +49,10 @@ index ba7eac7..572ebc2 100644
        <!-- section-header needs to left-align with the grid content below, and
             the easiest way to achieve this is to make it a grid as well. -->
 diff --git a/chrome/browser/resources/extensions/item_list.ts b/chrome/browser/resources/extensions/item_list.ts
-index 9cbac6f..93569e6 100644
+index c0a7ca6..4a7b6fc 100644
 --- a/chrome/browser/resources/extensions/item_list.ts
 +++ b/chrome/browser/resources/extensions/item_list.ts
-@@ -48,6 +48,11 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
+@@ -47,6 +47,11 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
          reflect: true,
        },
  
@@ -120,15 +64,15 @@ index 9cbac6f..93569e6 100644
        isMv2DeprecationNoticeDismissed: {
          type: Boolean,
          notify: true,
-@@ -103,6 +108,7 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
+@@ -107,6 +112,7 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
    accessor extensions: chrome.developerPrivate.ExtensionInfo[] = [];
    accessor delegate: ItemDelegate = new DummyItemDelegate();
    accessor inDevMode: boolean = false;
 +  accessor isLoadingUnpacked: boolean = false;
    accessor isMv2DeprecationNoticeDismissed: boolean = false;
+   accessor extensionsPinnedByDefault: boolean = false;
    accessor filter: string = '';
-   protected accessor filteredExtensions_:
-@@ -304,7 +310,9 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
+@@ -284,7 +290,9 @@ export class ExtensionsItemListElement extends ExtensionsItemListElementBase {
    }
  
    protected shouldShowEmptyItemsMessage_(): boolean {
@@ -140,22 +84,22 @@ index 9cbac6f..93569e6 100644
  
    protected shouldShowEmptySearchMessage_(): boolean {
 diff --git a/chrome/browser/resources/extensions/manager.html.ts b/chrome/browser/resources/extensions/manager.html.ts
-index f026152..ddc3118 100644
+index 43f1df6..350c00e 100644
 --- a/chrome/browser/resources/extensions/manager.html.ts
 +++ b/chrome/browser/resources/extensions/manager.html.ts
-@@ -50,6 +50,7 @@ ${this.showDrawer_ ? html`
+@@ -49,6 +49,7 @@ ${this.showDrawer_ ? html`
    <cr-view-manager id="viewManager" role="main">
-     <extensions-item-list id="items-list" .delegate="${this.delegate}"
+     <extensions-item-list id="itemsList" .delegate="${this.delegate}"
          ?in-dev-mode="${this.inDevMode}"
 +        ?is-loading-unpacked="${this.isLoadingUnpacked_}"
-         ?is-mv2-deprecation-notice-dismissed=
-             "${this.isMv2DeprecationNoticeDismissed}"
+         ?is-mv2-deprecation-notice-dismissed="${
+             this.isMv2DeprecationNoticeDismissed}"
          .filter="${this.filter}" ?hidden="${!this.didInitPage_}" slot="view"
 diff --git a/chrome/browser/resources/extensions/manager.ts b/chrome/browser/resources/extensions/manager.ts
-index 367e1ef..341a6e8 100644
+index 522e280..5f9c313 100644
 --- a/chrome/browser/resources/extensions/manager.ts
 +++ b/chrome/browser/resources/extensions/manager.ts
-@@ -74,6 +74,8 @@ function compareExtensions(
+@@ -75,6 +75,8 @@ function compareExtensions(
  declare global {
    interface HTMLElementEventMap {
      'load-error': CustomEvent<Error|chrome.developerPrivate.LoadError>;
@@ -164,7 +108,7 @@ index 367e1ef..341a6e8 100644
    }
  }
  
-@@ -147,6 +149,7 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
+@@ -149,6 +151,7 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
  
        showDrawer_: {type: Boolean},
        showLoadErrorDialog_: {type: Boolean},
@@ -172,7 +116,7 @@ index 367e1ef..341a6e8 100644
        showInstallWarningsDialog_: {type: Boolean},
        installWarnings_: {type: Array},
        showOptionsDialog_: {type: Boolean},
-@@ -184,6 +187,7 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
+@@ -187,6 +190,7 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
    protected accessor narrow_: boolean = false;
    protected accessor showDrawer_: boolean = false;
    protected accessor showLoadErrorDialog_: boolean = false;
@@ -180,7 +124,7 @@ index 367e1ef..341a6e8 100644
    protected accessor showInstallWarningsDialog_: boolean = false;
    protected accessor installWarnings_: string[]|null = null;
    protected accessor showOptionsDialog_: boolean = false;
-@@ -231,6 +235,10 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
+@@ -240,6 +244,10 @@ export class ExtensionsManagerElement extends ExtensionsManagerElementBase {
      super.firstUpdated(changedProperties);
  
      this.addEventListener('load-error', this.onLoadError_);
@@ -192,7 +136,7 @@ index 367e1ef..341a6e8 100644
      this.addEventListener('view-exit-start', this.onViewExitStart_);
      this.addEventListener('view-exit-finish', this.onViewExitFinish_);
 diff --git a/chrome/browser/resources/extensions/toolbar.ts b/chrome/browser/resources/extensions/toolbar.ts
-index 163d176..d6c5e0d 100644
+index 178a09a..d79bd6a 100644
 --- a/chrome/browser/resources/extensions/toolbar.ts
 +++ b/chrome/browser/resources/extensions/toolbar.ts
 @@ -180,6 +180,10 @@ export class ExtensionsToolbarElement extends ExtensionsToolbarElementBase {
@@ -217,7 +161,7 @@ index 163d176..d6c5e0d 100644
      chrome.metricsPrivate.recordUserAction('Options_LoadUnpackedExtension');
    }
 diff --git a/chrome/browser/ui/webui/extensions/extensions_ui.cc b/chrome/browser/ui/webui/extensions/extensions_ui.cc
-index 03fe42d..e8df9a5 100644
+index 4c382ee..6668517 100644
 --- a/chrome/browser/ui/webui/extensions/extensions_ui.cc
 +++ b/chrome/browser/ui/webui/extensions/extensions_ui.cc
 @@ -388,6 +388,10 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,

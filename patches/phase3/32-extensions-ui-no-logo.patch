@@ -6,41 +6,41 @@
 # このブラウザは Chromium ではないので名乗りとして誤りだし、拡張機能ページの
 # 見出しに製品ロゴは要らないため、画像を差し替えるのではなく消す。
 diff --git a/chrome/browser/resources/extensions/manager.html.ts b/chrome/browser/resources/extensions/manager.html.ts
-index ddc3118..cf96bf4 100644
+index 350c00e..0efe1db 100644
 --- a/chrome/browser/resources/extensions/manager.html.ts
 +++ b/chrome/browser/resources/extensions/manager.html.ts
-@@ -31,13 +31,7 @@ ${this.showDrawer_ ? html`
+@@ -29,13 +29,7 @@ ${this.showDrawer_ ? html`
            ?enable-enhanced-site-controls="${this.enableEnhancedSiteControls}">
        </extensions-sidebar>
      </div>
--    <if expr="is_android">
--      <picture slot="header-icon">
--        <source media="(prefers-color-scheme: dark)"
--            srcset="//resources/images/chrome_logo_dark.svg">
--        <img srcset="images/product_logo.png" role="presentation">
--      </picture>
--    </if>
-+    <!-- mobile-bex: Chromium のロゴは出さない (toolbar.html.ts と同じ理由)。 -->
-   </cr-drawer>` : ''}
- <div id="container" class="cr-scrollable">
-   <div id="scrollableShadow" class="cr-scrollable-top-shadow"></div>
-diff --git a/chrome/browser/resources/extensions/toolbar.html.ts b/chrome/browser/resources/extensions/toolbar.html.ts
-index df24e31..1d4b431 100644
---- a/chrome/browser/resources/extensions/toolbar.html.ts
-+++ b/chrome/browser/resources/extensions/toolbar.html.ts
-@@ -25,13 +25,8 @@ export function getHtml(this: ToolbarElement) {
-         aria-labelledby="devModeLabel">
-     </cr-toggle>
-   </div>
--  <if expr="is_android">
--    <picture slot="product-logo">
+-<if expr="is_android">
+-    <picture slot="header-icon">
 -      <source media="(prefers-color-scheme: dark)"
 -          srcset="//resources/images/chrome_logo_dark.svg">
 -      <img srcset="images/product_logo.png" role="presentation">
 -    </picture>
--  </if>
+-</if>
++    <!-- mobile-bex: Chromium のロゴは出さない (toolbar.html.ts と同じ理由)。 -->
+   </cr-drawer>
+ ` : ''}
+ <div id="container" class="cr-scrollable">
+diff --git a/chrome/browser/resources/extensions/toolbar.html.ts b/chrome/browser/resources/extensions/toolbar.html.ts
+index f2de5b0..772b353 100644
+--- a/chrome/browser/resources/extensions/toolbar.html.ts
++++ b/chrome/browser/resources/extensions/toolbar.html.ts
+@@ -26,13 +26,8 @@ export function getHtml(this: ToolbarElement) {
+         aria-labelledby="devModeLabel">
+     </cr-toggle>
+   </div>
+-<if expr="is_android">
+-  <picture slot="product-logo">
+-    <source media="(prefers-color-scheme: dark)"
+-        srcset="//resources/images/chrome_logo_dark.svg">
+-    <img srcset="images/product_logo.png" role="presentation">
+-  </picture>
+-</if>
 +  <!-- mobile-bex: Chromium のロゴは出さない。このブラウザは Chromium ではないので
 +       名乗りとして誤りだし、拡張機能ページの見出しに製品ロゴは要らない。 -->
  </cr-toolbar>
  ${this.showPackDialog_ ? html`
-   <extensions-pack-dialog .delegate="${this.delegate}"
+   <extensions-pack-dialog .delegate="${this.delegate as ServiceInterface}"

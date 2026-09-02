@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/resources/extensions/extensions.html b/chrome/browser/resources/extensions/extensions.html
-index 58f56797ee..dd8098956e 100644
+index ac398cf..0561748 100644
 --- a/chrome/browser/resources/extensions/extensions.html
 +++ b/chrome/browser/resources/extensions/extensions.html
 @@ -4,6 +4,7 @@
@@ -11,10 +11,10 @@ index 58f56797ee..dd8098956e 100644
    <base href="chrome://extensions">
    <link rel="stylesheet" href="chrome://resources/css/md_colors.css">
 diff --git a/chrome/browser/resources/extensions/item_list.css b/chrome/browser/resources/extensions/item_list.css
-index c7c0e32493..6abd62074b 100644
+index 05cc88e..cbcbaed 100644
 --- a/chrome/browser/resources/extensions/item_list.css
 +++ b/chrome/browser/resources/extensions/item_list.css
-@@ -100,3 +100,16 @@ managed-footnote {
+@@ -120,3 +120,64 @@ managed-footnote {
     * is clickable. */
    z-index: 1;
  }
@@ -31,15 +31,62 @@ index c7c0e32493..6abd62074b 100644
 +    max-width: none;
 +  }
 +}
++
++/* mobile-bex: 未パッケージ拡張機能の読み込み中プレースホルダ。
++ * 拡張機能カードと同じ枠内に点線で表示し、処理中であることを示す。 */
++#loading-placeholder {
++  align-items: center;
++  border: 2px dashed var(--color-side-panel-card-primary-foreground,
++                        var(--cr-secondary-text-color));
++  border-radius: var(--cr-card-border-radius, 12px);
++  box-sizing: border-box;
++  display: flex;
++  gap: 16px;
++  min-height: 80px;
++  opacity: 0.85;
++  padding: 20px;
++}
++
++#loading-placeholder .loading-spinner {
++  animation: bex-spin 900ms linear infinite;
++  border: 3px solid var(--cr-separator-color, rgba(0, 0, 0, 0.15));
++  border-radius: 50%;
++  border-top-color: var(--cr-link-color, #1a73e8);
++  flex-shrink: 0;
++  height: 24px;
++  width: 24px;
++}
++
++@keyframes bex-spin {
++  to { transform: rotate(360deg); }
++}
++
++#loading-placeholder .loading-title {
++  color: var(--cr-primary-text-color);
++  font-size: 100%;
++  font-weight: 500;
++}
++
++#loading-placeholder .loading-subtitle {
++  color: var(--cr-secondary-text-color);
++  font-size: 90%;
++  margin-top: 4px;
++}
++
++/* 「動きを減らす」設定を尊重する */
++@media (prefers-reduced-motion: reduce) {
++  #loading-placeholder .loading-spinner {
++    animation-duration: 3s;
++  }
++}
 diff --git a/chrome/browser/resources/extensions/manager.css b/chrome/browser/resources/extensions/manager.css
-index 18cf43dd6c..b35002e915 100644
+index e13459c..825ee11 100644
 --- a/chrome/browser/resources/extensions/manager.css
 +++ b/chrome/browser/resources/extensions/manager.css
-@@ -73,3 +73,11 @@ extensions-item {
- #right {
-   flex: 1 1 0;
+@@ -87,3 +87,10 @@ picture[slot='header-icon'] img {
+   width: 100%;
  }
-+
+ 
 +/* mobile-bex: phone layout */
 +@media (max-width: 680px) {
 +  cr-toast-manager {
@@ -48,14 +95,13 @@ index 18cf43dd6c..b35002e915 100644
 +  }
 +}
 diff --git a/chrome/browser/resources/extensions/toolbar.css b/chrome/browser/resources/extensions/toolbar.css
-index 7e723e0284..7092a6668e 100644
+index 881317e..06ae25c 100644
 --- a/chrome/browser/resources/extensions/toolbar.css
 +++ b/chrome/browser/resources/extensions/toolbar.css
-@@ -79,3 +79,26 @@ cr-toolbar {
-   --cr-toolbar-field-width: 100%;
-   --cr-toolbar-header-white-space: nowrap;
+@@ -97,3 +97,25 @@ picture[slot='product-logo'] img {
+   width: 100%;
  }
-+
+ 
 +/* mobile-bex: phone layout */
 +@media (max-width: 680px) {
 +  #buttonStrip {

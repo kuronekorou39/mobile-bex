@@ -3,20 +3,20 @@
 # 並べるような拡張機能では使えない。動画の有無に関係なく Activity ごと
 # 小窓化する (Custom Tab の最小化と同じ手法)。
 diff --git a/chrome/android/java/res/values/ids.xml b/chrome/android/java/res/values/ids.xml
-index 56f0bd2..862ed12 100644
+index 157ce83..20f57d0 100644
 --- a/chrome/android/java/res/values/ids.xml
 +++ b/chrome/android/java/res/values/ids.xml
-@@ -134,6 +134,8 @@ found in the LICENSE file.
-     <item type="id" name="reload_menu_id" />
-     <item type="id" name="update_menu_id" />
-     <item type="id" name="new_tab_menu_id" />
-+    <item type="id" name="bex_pip_menu_id" />
+@@ -180,6 +180,8 @@ found in the LICENSE file.
+     <item type="id" name="auto_dark_web_contents_check_id" />
+     <item type="id" name="auto_dark_web_contents_id" />
+     <item type="id" name="back_menu_id" />
 +    <item type="id" name="bex_pip_divider_line_id" />
-     <item type="id" name="new_incognito_tab_menu_id" />
-     <item type="id" name="add_to_group_menu_id" />
-     <item type="id" name="pin_tab_menu_id" />
++    <item type="id" name="bex_pip_menu_id" />
+     <item type="id" name="bookmark_bar_parent_menu_id" />
+     <item type="id" name="bookmark_bar_state_always_hide_menu_id" />
+     <item type="id" name="bookmark_bar_state_always_show_menu_id" />
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-index 6a3d726..d52d256 100644
+index 599dfa8..55bad29 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 @@ -16,6 +16,7 @@ import static org.chromium.chrome.browser.ui.IncognitoRestoreAppLaunchDrawBlocke
@@ -35,7 +35,7 @@ index 6a3d726..d52d256 100644
  import android.text.TextUtils;
  import android.text.format.DateUtils;
  import android.util.Pair;
-@@ -394,6 +396,9 @@ import java.util.function.Supplier;
+@@ -437,6 +439,9 @@ import java.util.function.Supplier;
   * accessible via a chrome specific tab switching UI.
   */
  public class ChromeTabbedActivity extends ChromeActivity implements PreAttachIntentObserver {
@@ -45,7 +45,7 @@ index 6a3d726..d52d256 100644
      // Name of the ChromeTabbedActivity alias that handles MAIN intents.
      public static final String MAIN_LAUNCHER_ACTIVITY_NAME = "com.google.android.apps.chrome.Main";
  
-@@ -599,6 +604,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -643,6 +648,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
      private HistoricalTabModelObserver mHistoricalTabModelObserver;
      private UndoRefocusHelper mUndoRefocusHelper;
      private BrowserControlsVisibilityDelegate mVrBrowserControlsVisibilityDelegate;
@@ -55,8 +55,8 @@ index 6a3d726..d52d256 100644
      private boolean mUiWithNativeInitialized;
      private LocaleManager mLocaleManager;
      private Runnable mShowHistoryRunnable;
-@@ -1703,6 +1711,32 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
-                 !mFromResumption);
+@@ -1892,6 +1900,32 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+         }
      }
  
 +    /**
@@ -88,18 +88,18 @@ index 6a3d726..d52d256 100644
      @Override
      public void onNewIntent(Intent intent) {
          try (TraceEvent e = TraceEvent.scoped("ChromeTabbedActivity.onNewIntent")) {
-@@ -4025,6 +4059,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
-                 NewTabPageUma.recordAction(NewTabPageUma.ACTION_OPENED_RECENT_TABS_MANAGER);
-             }
-             RecordUserAction.record("MobileMenuRecentTabs");
+@@ -4507,6 +4541,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+                     getToolbarManager().getExtensionsToolbarCoordinator();
+             coordinator.showExtensionsMenu();
+             RecordUserAction.record("MobileMenuExtensionsMenu");
 +        } else if (id == R.id.bex_pip_menu_id) {
 +            enterPictureInPictureFromMenu();
 +            RecordUserAction.record("MobileMenuBexPip");
-         } else if (id == R.id.extensions_menu_id) {
+         } else if (id == R.id.manage_extensions_menu_id) {
              LoadUrlParams params =
                      new LoadUrlParams(
-@@ -4927,6 +4964,35 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
-                                         .isGoogleSearchUrl(currentStandardTab.getUrl().getSpec()));
+@@ -5548,6 +5585,35 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+                                         currentStandardTab.getUrl().getSpec()));
      }
  
 +    /**
@@ -135,10 +135,10 @@ index 6a3d726..d52d256 100644
      public void onEnterVr() {
          super.onEnterVr();
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-index 9490a75..3948530 100644
+index e4548b2..b502c36 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-@@ -8,6 +8,7 @@ import static org.chromium.build.NullUtil.assertNonNull;
+@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.tabbed_mode;
  import static org.chromium.build.NullUtil.assumeNonNull;
  
  import android.content.Context;
@@ -146,8 +146,8 @@ index 9490a75..3948530 100644
  import android.content.res.Resources;
  import android.graphics.drawable.Drawable;
  import android.util.SparseArray;
-@@ -246,6 +247,16 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
-                             buildModelForIconRow(R.id.icon_row_menu_id, iconModels)));
+@@ -344,6 +345,16 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+                                     R.id.icon_row_menu_id, iconModels, isMenuIconAtStart())));
          }
  
 +        // 小窓表示 (picture-in-picture)。目立たせたいのでメニューの最上部に置き、
@@ -157,14 +157,14 @@ index 9490a75..3948530 100644
 +            modelList.add(
 +                    new MVCListAdapter.ListItem(
 +                            AppMenuHandler.AppMenuItemType.DIVIDER,
-+                            buildModelForDivider(R.id.bex_pip_divider_line_id)));
++                            AppMenuItemUtils.buildModelForDivider(R.id.bex_pip_divider_line_id)));
 +        }
 +
          mUpdateMenuItemVisible = shouldShowUpdateMenuItem();
+         Profile profile = getProfileFromTabModel();
          if (mUpdateMenuItemVisible) {
-             modelList.add(buildUpdateItem());
-@@ -683,6 +694,23 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
-                         shouldShowIconBeforeItem() ? R.drawable.devices_black_24dp : 0));
+@@ -1065,6 +1076,28 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+                         isMenuIconAtStart()));
      }
  
 +    /**
@@ -180,20 +180,25 @@ index 9490a75..3948530 100644
 +    private MVCListAdapter.ListItem buildPipItem() {
 +        return new MVCListAdapter.ListItem(
 +                AppMenuHandler.AppMenuItemType.STANDARD,
-+                buildModelForStandardMenuItem(
-+                        R.id.bex_pip_menu_id, R.string.bex_menu_pip, /* iconResId= */ 0));
++                AppMenuItemUtils.buildModelForStandardMenuItem(
++                        mContext,
++                        getAppMenuItemTheme(),
++                        R.id.bex_pip_menu_id,
++                        R.string.bex_menu_pip,
++                        /* iconResId= */ 0,
++                        isMenuIconAtStart()));
 +    }
 +
      private boolean shouldShowExtensionsItem() {
          // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
          return ExtensionUi.isEnabled(getProfileFromTabModel());
 diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-index 7bd9c78..83a0c39 100644
+index ef4012b..a7571d3 100644
 --- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
 +++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-@@ -4314,6 +4314,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
-       <message name="IDS_MENU_RECENT_TABS" desc="Menu item for opening the 'Recent tabs' page that shows recently closed tabs and pages the user has opened on his/her other devices. [CHAR_LIMIT=27]">
-         Recent tabs
+@@ -4369,6 +4369,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+       <message name="IDS_MENU_WINDOW_TITLE_WITH_TAB_COUNT" desc="Format string to display a window title followed by the number of tabs in that window, for example 'Window 1 - 5 tabs'. [CHAR_LIMIT=27]">
+         <ph name="WINDOW_TITLE">%1$s<ex>Window name</ex></ph> - <ph name="TAB_COUNT">%2$s<ex>5 tabs</ex></ph>
        </message>
 +      <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
 +        小窓表示

@@ -1,6 +1,6 @@
 # Patch 20: アプリ名を BEX に変更
 diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml b/chrome/android/java/res_chromium_base/values/channel_constants.xml
-index cc1f2a30cb..cf884067a3 100644
+index cc1f2a3..cf88406 100644
 --- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
 +++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
 @@ -7,7 +7,7 @@ found in the LICENSE file.

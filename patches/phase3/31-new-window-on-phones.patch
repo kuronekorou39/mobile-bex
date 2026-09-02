@@ -11,11 +11,11 @@
 # インスタンス数の上限 (getMaxInstances) は端末のメモリ量で決まるので触っていない。
 # Pixel 9a では 20 まで許可される。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-index 3948530..9e415cf 100644
+index b502c36..aae3e55 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-@@ -1211,16 +1211,17 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
-             if (MultiWindowUtils.getInstanceCountWithFallback(PersistedInstanceType.ACTIVE)
+@@ -1719,14 +1719,18 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+             if (MultiWindowUtils.getInstanceCount(PersistedInstanceType.ACTIVE)
                      >= MultiWindowUtils.getMaxInstances()) return false;
  
 -            // On phones, show the menu only when in split-screen, with a single instance
@@ -32,11 +32,10 @@ index 3948530..9e415cf 100644
 +            return true;
          } else {
              if (mMultiWindowModeStateDispatcher.isMultiInstanceRunning()) return false;
--            return (mMultiWindowModeStateDispatcher.canEnterMultiWindowMode()
--                            && isTabletSizeScreen())
-+            // mobile-bex: こちらも同じ理由で画面サイズの条件を外す。ただしマルチ
-+            // ウィンドウに入れない端末で出しても意味がないので、その判定は残す。
-+            return mMultiWindowModeStateDispatcher.canEnterMultiWindowMode()
-                     || mMultiWindowModeStateDispatcher.isInMultiWindowMode()
++            // mobile-bex: 153 では canEnterMultiWindowMode() が無くなった
++            // (MultiWindowUtils のパッケージ内部に移動)。この分岐はマルチインスタンス
++            // 非対応の古い端末用で、Android 12 以降は手前の分岐が true を返すため、
++            // ここは上流の条件のままでよい。
+             return mMultiWindowModeStateDispatcher.isInMultiWindowMode()
                      || mMultiWindowModeStateDispatcher.isInMultiDisplayMode();
          }

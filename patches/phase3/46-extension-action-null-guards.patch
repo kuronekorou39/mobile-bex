@@ -1,0 +1,51 @@
+# Patch 46: 拡張機能アクションの null 参照でブラウザが落ちるのを防ぐ
+# 上流のコードは、ツールバーがまだ知らない (あるいは今まさに削除された) 拡張機能の
+# ID を渡されると、GetActionModelForId() の戻り値 (nullptr) をそのまま参照して落ちる。
+#
+#   ExtensionsToolbarAndroid::GetAction        Java 側は @Nullable と宣言しているのに
+#                                              null を返す道が無く、クラッシュしていた
+#   ExtensionsToolbarViewModel::ExecuteUserAction
+#                                              初期化前や削除直後の ID で落ちる
+#
+# どちらも「知らない ID なら何もしない」を返すようにする。ホーム画面ショートカットの
+# ように、ツールバーの外から ID を指定する経路で踏む。
+diff --git a/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc b/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
+index 7cd262f..189710d 100644
+--- a/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
++++ b/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
+@@ -207,6 +207,14 @@ base::android::ScopedJavaLocalRef<jobject> ExtensionsToolbarAndroid::GetAction(
+   ToolbarActionViewModel* action =
+       toolbar_view_model_->GetActionModelForId(action_id);
+ 
++  // mobile-bex: the Java side declares this @Nullable, but nothing returned
++  // null: an unknown id crashed instead. Callers use null to mean "the toolbar
++  // does not know this action (yet)", so answer that. Launcher shortcuts can
++  // name an extension the toolbar has not learned about.
++  if (!action) {
++    return base::android::ScopedJavaLocalRef<jobject>();
++  }
++
+   auto hover_card_state = action->GetHoverCardState(web_contents);
+   ExtensionActionViewModel::HoverCardUiState ui_state =
+       action->GetHoverCardUiState(hover_card_state, web_contents);
+diff --git a/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc b/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc
+index 0997e68..bbdafd9 100644
+--- a/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc
++++ b/chrome/browser/ui/extensions/extensions_toolbar_view_model.cc
+@@ -277,7 +277,15 @@ void ExtensionsToolbarViewModel::ExecuteUserAction(
+     return;
+   }
+ 
+-  GetActionModelForId(action_id)->ExecuteUserAction(source);
++  // mobile-bex: GetActionModelForId() returns null for an id this model does
++  // not know, e.g. before OnToolbarModelInitialized() has run, or for an
++  // extension that was just uninstalled. Dereferencing it crashed the browser
++  // when launching an extension from a launcher shortcut.
++  ToolbarActionViewModel* action = GetActionModelForId(action_id);
++  if (!action) {
++    return;
++  }
++  action->ExecuteUserAction(source);
+ }
+ 
+ void ExtensionsToolbarViewModel::GrantSiteAccess(

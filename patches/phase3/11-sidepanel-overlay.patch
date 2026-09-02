@@ -1,10 +1,10 @@
 # Patch 11: chrome.sidePanel の右スライドオーバーレイ実装 (Java/res)
 # BUILD.gn には 09 の BottomSheet ソース登録も含む（ファイル所有を一意にするため）。
 diff --git a/chrome/browser/ui/android/extensions/BUILD.gn b/chrome/browser/ui/android/extensions/BUILD.gn
-index 607ade2..1084616 100644
+index 4d1c4cb..3604cbf 100644
 --- a/chrome/browser/ui/android/extensions/BUILD.gn
 +++ b/chrome/browser/ui/android/extensions/BUILD.gn
-@@ -33,19 +33,30 @@ android_library("java") {
+@@ -100,7 +100,12 @@ android_library("java") {
    if (enable_extensions_core) {
      deps += [
        ":java_resources",
@@ -17,9 +17,10 @@ index 607ade2..1084616 100644
        "//components/browser_ui/modaldialog/android:java",
        "//components/browser_ui/settings/android:java",
        "//components/browser_ui/site_settings/android:java",
-       "//content/public/android:content_full_java",
+@@ -108,12 +113,16 @@ android_library("java") {
        "//third_party/androidx:androidx_annotation_annotation_java",
        "//third_party/jni_zero:jni_zero_java",
+       "//ui/android:ui_utils_java",
 +      "//components/thin_webview:factory_java",
 +      "//components/thin_webview:java",
      ]
@@ -28,14 +29,12 @@ index 607ade2..1084616 100644
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionContextMenuBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionsBridge.java",
-+      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContent.java",
-+      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinator.java",
-+      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java",
++          "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java",
 +      "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionDeveloperPrivateBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionInstallDialogBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUiBackendImpl.java",
-@@ -73,6 +84,7 @@ if (enable_extensions_core) {
+@@ -142,6 +151,7 @@ if (enable_extensions_core) {
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionContextMenuBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionPopupContents.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionActionsBridge.java",
@@ -43,16 +42,7 @@ index 607ade2..1084616 100644
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionDeveloperPrivateBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionInstallDialogBridge.java",
        "java/src/org/chromium/chrome/browser/ui/extensions/ExtensionUtilBridge.java",
-@@ -160,6 +172,8 @@ if (enable_extensions_core) {
- 
-   robolectric_library("junit") {
-     sources = [
-+      "javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetContentTest.java",
-+      "javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionBottomSheetCoordinatorTest.java",
-       "javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionDeveloperPrivateBridgeTest.java",
-       "javatests/src/org/chromium/chrome/browser/ui/extensions/ExtensionInstallDialogBridgeTest.java",
-       "javatests/src/org/chromium/chrome/browser/ui/extensions/FakeExtensionActionsBridgeTest.java",
-@@ -168,6 +182,11 @@ if (enable_extensions_core) {
+@@ -232,6 +242,11 @@ if (enable_extensions_core) {
      deps = [
        ":java",
        ":java_resources",
@@ -64,12 +54,10 @@ index 607ade2..1084616 100644
        ":test_support_java",
        "//base:base_java",
        "//base:base_java_test_support",
-@@ -208,6 +227,10 @@ android_resources("java_resources") {
-     "java/res/layout/extensions_menu_item.xml",
+@@ -286,6 +301,8 @@ android_resources("java_resources") {
      "java/res/values/dimens.xml",
      "java/res/values/integers.xml",
-+    "java/res/values/strings.xml",
-+    "java/res/values/styles.xml",
+     "java/res/values/styles.xml",
 +    "java/res/anim/extension_side_panel_enter.xml",
 +    "java/res/anim/extension_side_panel_exit.xml",
    ]
@@ -106,21 +94,24 @@ index 0000000..9850c8f
 +    android:duration="250"
 +    android:interpolator="@android:anim/accelerate_interpolator" />
 diff --git a/chrome/browser/ui/android/extensions/java/res/values/styles.xml b/chrome/browser/ui/android/extensions/java/res/values/styles.xml
-new file mode 100644
-index 0000000..1b52209
---- /dev/null
+index 2481996..6567e04 100644
+--- a/chrome/browser/ui/android/extensions/java/res/values/styles.xml
 +++ b/chrome/browser/ui/android/extensions/java/res/values/styles.xml
-@@ -0,0 +1,10 @@
-+<?xml version="1.0" encoding="utf-8"?>
-+<!-- Copyright 2025 The Chromium Authors
-+     Use of this source code is governed by a BSD-style license that can be
-+     found in the LICENSE file. -->
-+<resources>
+@@ -1,4 +1,3 @@
+-<?xml version="1.0" encoding="utf-8"?>
+ <!--
+ Copyright 2026 The Chromium Authors
+ Use of this source code is governed by a BSD-style license that can be
+@@ -53,4 +52,9 @@ found in the LICENSE file.
+         <item name="android:textAllCaps">false</item>
+         <item name="android:textColor">@color/default_text_color_list</item>
+     </style>
++    <!-- mobile-bex: sidePanel を右からスライドさせるためのアニメーション -->
 +    <style name="ExtensionSidePanelAnimation">
 +        <item name="android:windowEnterAnimation">@anim/extension_side_panel_enter</item>
 +        <item name="android:windowExitAnimation">@anim/extension_side_panel_exit</item>
 +    </style>
-+</resources>
+ </resources>
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelBridge.java
 new file mode 100644
 index 0000000..217bbc4
@@ -212,7 +203,7 @@ index 0000000..217bbc4
 +}
 diff --git a/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java
 new file mode 100644
-index 0000000..a642731
+index 0000000..558e057
 --- /dev/null
 +++ b/chrome/browser/ui/android/extensions/java/src/org/chromium/chrome/browser/ui/extensions/ExtensionSidePanelCoordinator.java
 @@ -0,0 +1,180 @@
@@ -241,6 +232,7 @@ index 0000000..a642731
 +import org.chromium.chrome.browser.profiles.Profile;
 +import org.chromium.components.embedder_support.view.ContentView;
 +import org.chromium.components.thinwebview.ThinWebView;
++import org.chromium.components.thinwebview.ThinWebViewAttachParams;
 +import org.chromium.components.thinwebview.ThinWebViewConstraints;
 +import org.chromium.components.thinwebview.ThinWebViewFactory;
 +import org.chromium.content_public.browser.LoadUrlParams;
@@ -291,16 +283,15 @@ index 0000000..a642731
 +                WebContents.createDefaultInternalsHolder());
 +
 +        // Create ThinWebView.
-+        IntentRequestTracker intentRequestTracker = windowAndroid.getIntentRequestTracker();
-+        if (intentRequestTracker == null) {
-+            Log.w(TAG, "IntentRequestTracker is null, cannot create ThinWebView");
-+            cleanup();
-+            return;
-+        }
++        // mobile-bex: 153 で ThinWebViewFactory.create の3引数版は WindowAndroid を取る形に
++        // なった (IntentRequestTracker 版は4引数)。WindowAndroid をそのまま渡す。
 +        mThinWebView =
 +                ThinWebViewFactory.create(
-+                        activity, new ThinWebViewConstraints(), intentRequestTracker);
-+        mThinWebView.attachWebContents(mWebContents, contentView, null);
++                        activity, new ThinWebViewConstraints(), windowAndroid);
++        // mobile-bex: 153 の attachWebContents は ThinWebViewAttachParams を要求する
++        // (null 不可)。sidePanel では既定のままでよいので空の params を渡す。
++        mThinWebView.attachWebContents(
++                mWebContents, contentView, new ThinWebViewAttachParams.Builder().build());
 +
 +        // Set background to black (same fix as BottomSheet).
 +        mThinWebView.getView().setBackgroundColor(Color.BLACK);
@@ -397,10 +388,10 @@ index 0000000..a642731
 +    }
 +}
 diff --git a/chrome/browser/ui/extensions/extension_action_view_model.cc b/chrome/browser/ui/extensions/extension_action_view_model.cc
-index f42c725..33cf1a1 100644
+index d033e46..4caaf3e 100644
 --- a/chrome/browser/ui/extensions/extension_action_view_model.cc
 +++ b/chrome/browser/ui/extensions/extension_action_view_model.cc
-@@ -48,6 +48,8 @@
+@@ -53,6 +53,8 @@
  #include "ui/gfx/native_ui_types.h"
  #include "ui/native_theme/native_theme.h"
  
@@ -409,7 +400,7 @@ index f42c725..33cf1a1 100644
  #if BUILDFLAG(ENABLE_EXTENSIONS)
  #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
  #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
-@@ -336,7 +338,13 @@ bool ExtensionActionViewModel::IsEnabled(
+@@ -435,7 +437,13 @@ bool ExtensionActionViewModel::IsEnabled(
        side_panel_service->HasSidePanelActionForTab(*extension_, tab_id)) {
      return true;
    }
@@ -424,7 +415,7 @@ index f42c725..33cf1a1 100644
    return false;
  }
  
-@@ -647,7 +655,8 @@ ExtensionActionViewModel::GetIconImageSource(content::WebContents* web_contents,
+@@ -820,7 +828,8 @@ ExtensionActionViewModel::GetIconImageSource(content::WebContents* web_contents,
        side_panel_service &&
        side_panel_service->HasSidePanelActionForTab(*extension_, tab_id);
  #else   // BUILDFLAG(ENABLE_EXTENSIONS)
@@ -433,4 +424,4 @@ index f42c725..33cf1a1 100644
 +      extensions::SidePanelInfo::HasSidePanel(extension_.get());
  #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
    bool is_grayscale =
-       GetSiteInteraction(web_contents) ==
+       !action_is_visible && !has_side_panel_action &&

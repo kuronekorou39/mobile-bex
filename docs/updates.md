@@ -39,7 +39,7 @@ versionCode はリベースしない限り変わらないため（同じ Chromiu
 - 確認は起動時に1日1回まで。API のレート制限は未認証で 60 req/hour/IP
 - 設定 → BEX について → 「更新を確認」から手動でも調べられる
 - 版数の取得に `ApkInfo.getPackageVersionName()` は使えない。名前に反して、
-  ブラウザとして起動した経路では Chromium の版数 (147.x) を返す。
+  ブラウザとして起動した経路では Chromium の版数 (153.x) を返す。
   `BexUpdateChecker.getInstalledVersion()` が PackageManager から直接取る
 
 ### 併用: Obtainium

@@ -180,18 +180,18 @@ index 70db74f..e511211 100644
  
      @Override
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-index 4806572..cdc68d8 100644
+index 6556f28..16a7353 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-@@ -120,6 +120,7 @@ import org.chromium.chrome.browser.multiwindow.MultiInstanceManager;
- import org.chromium.chrome.browser.multiwindow.MultiWindowUtils;
- import org.chromium.chrome.browser.ntp_customization.NtpCustomizationUtils;
- import org.chromium.chrome.browser.ntp_customization.edge_to_edge.TopInsetCoordinator;
+@@ -120,6 +120,7 @@ import org.chromium.chrome.browser.layouts.LayoutType;
+ import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+ import org.chromium.chrome.browser.lifecycle.DestroyObserver;
+ import org.chromium.chrome.browser.lifecycle.InflationObserver;
 +import org.chromium.chrome.browser.omaha.BexUpdateChecker;
- import org.chromium.chrome.browser.omnibox.OmniboxActionDelegateImpl;
- import org.chromium.chrome.browser.omnibox.OmniboxChipManager;
- import org.chromium.chrome.browser.omnibox.geo.GeolocationHeader;
-@@ -1354,6 +1355,10 @@ public class RootUiCoordinator
+ import org.chromium.chrome.browser.lifecycle.NativeInitObserver;
+ import org.chromium.chrome.browser.lifecycle.WindowFocusChangedObserver;
+ import org.chromium.chrome.browser.media.TabSharingToolbarUiCoordinator;
+@@ -1668,6 +1669,10 @@ public class RootUiCoordinator
          // 初回のみデスクトップ表示を既定にする。
          DesktopSiteUtils.maybeDefaultEnableWebStoreDesktopSite(originalProfile);
  
@@ -224,7 +224,7 @@ index 16a1f58..c528a54 100644
      "//chrome/browser/preferences:java",
 diff --git a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java
 new file mode 100644
-index 0000000..226349b
+index 0000000..40ed55f
 --- /dev/null
 +++ b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/BexUpdateChecker.java
 @@ -0,0 +1,220 @@
@@ -346,7 +346,7 @@ index 0000000..226349b
 +                                .putLong(PREF_LAST_CHECK_MS, System.currentTimeMillis())
 +                                .apply();
 +                    }
-+                    PostTask.postTask(TaskTraits.UI_DEFAULT, () -> callback.onResult(version));
++                    PostTask.postTask(TaskTraits.UI_DEFAULT, callback.bind(version));
 +                });
 +    }
 +
@@ -449,7 +449,7 @@ index 0000000..226349b
 +    }
 +}
 diff --git a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java
-index 6a534e6..e1a8195 100644
+index 6d273b9..a5fe2ad 100644
 --- a/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java
 +++ b/chrome/browser/omaha/android/java/src/org/chromium/chrome/browser/omaha/UpdateStatusProvider.java
 @@ -16,13 +16,11 @@ import android.text.TextUtils;
@@ -466,7 +466,7 @@ index 6a534e6..e1a8195 100644
  import org.chromium.base.ThreadUtils;
  import org.chromium.base.task.AsyncTask;
  import org.chromium.base.task.AsyncTask.Status;
-@@ -294,12 +292,13 @@ public class UpdateStatusProvider {
+@@ -296,12 +294,13 @@ public class UpdateStatusProvider {
                  status.updateUrl = MarketURLGetter.getMarketUrl();
                  status.latestVersion = VersionNumberGetter.getInstance().getLatestKnownVersion();
  

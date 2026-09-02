@@ -2,36 +2,54 @@
 # URL を貼り付けた後にドメインだけ直したいとき、1行の横スクロールなので先頭まで
 # スクロールして戻る必要があった。
 #
-# 上流にも複数行編集 (OmniboxMultilineEditField、既定で有効) はあり、フォーカス中は
-# setSingleLine(false) + maxLines=5、ツールバーも WRAP_CONTENT で縦に伸びる。
-# ただし折り返すかどうかの判定が
+# 上流にも複数行編集の仕組みはあり、UrlBar は初期化時に setSingleLine(false) と
+# maxLines を設定済み。折り返すかどうかは updateUrlBarForMultilineInput() が
 #
-#   setInputIsMultilineEligible(TextUtils.indexOf(text, ' ') >= 0)
-#     ... AutocompleteInputConnection#setAutocompleteSpan
+#   wantWrap = mFocused && mCurrentInputCanBeWrapped
 #
-# 「入力に空白があるか」= 検索語かどうか、になっている。URL には空白が無いので
-# 常に横スクロールの1行のままだった。
+# で決めていて、mCurrentInputCanBeWrapped は「入力に空白があるか」= 検索語かどうか
+# (AutocompleteInputConnection#setAutocompleteSpan)。URL には空白が無いので常に
+# 1行のままだった。編集中は中身によらず折り返すようにする。
 #
-# 編集中は中身によらず折り返すようにする。ブラウザとしては URL を扱う時間のほうが
-# 長く、折り返したほうが目的の位置を直接タップできる。
+# もう1箇所、153 で追加された LocationBarPhone の URL 中央寄せ処理が、onMeasure から
+# 毎回 setHorizontallyScrolling() を呼び直しており、フォーカス中は centeringApplied が
+# false になるため折り返し設定が打ち消されていた。編集中は UrlBar 側の判断に任せる。
 #
 # 副作用: URL を打っている最中も行が増減するので、ツールバーの高さが変わる
 # (上流の WRAP_CONTENT の作りに乗っているだけで、追加の実装はしていない)。
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java
+index b4e7d9d..251b5bf 100644
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java
+@@ -355,7 +355,13 @@ class LocationBarPhone extends LocationBarLayout {
+         // Horizontal scrolling must be disabled when centering to ensure layout-gravity centering
+         // behaves correctly and doesn't get offset by residual scroll ranges. It is restored to
+         // true when not centering to allow horizontal scrolling/editing of long text.
+-        mUrlBar.setHorizontallyScrolling(!centeringApplied || !fitsInCenteringSpace);
++        //
++        // mobile-bex: ただし編集中は UrlBar 側の判断 (updateUrlBarForMultilineInput) に任せる。
++        // ここは onMeasure から何度も呼ばれ、フォーカス中は centeringApplied が false になる
++        // ため、放っておくと折り返し設定が毎回 true (横スクロール) に戻されてしまう。
++        if (!mUrlBar.hasFocus()) {
++            mUrlBar.setHorizontallyScrolling(!centeringApplied || !fitsInCenteringSpace);
++        }
+ 
+         // Reset scroll position to 0 when centering. Otherwise, if the previous URL was long
+         // and scrolled, the short centered URL might remain scrolled out of view.
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
-index 5b54e5e..7a628c1 100644
+index ee9cd85..6c1a8c1 100644
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
-@@ -475,7 +475,12 @@ public class UrlBar extends AutocompleteEditText {
+@@ -507,7 +507,11 @@ public class UrlBar extends AutocompleteEditText {
+     }
  
-     @Override
-     public void setInputIsMultilineEligible(boolean isMultilineEligible) {
--        isMultilineEligible &= mFocused;
-+        // mobile-bex: 上流は「入力に空白があるか」(= 検索語か) で折り返すかを決めている
-+        // (AutocompleteInputConnection#setAutocompleteSpan)。URL には空白が無いので常に
-+        // 1行の横スクロールになり、貼り付けた URL のドメインを直すのに先頭まで戻る操作が
-+        // 必要だった。編集中は中身によらず折り返す (最大行数は MULTILINE_EDIT_MAX_LINES、
-+        // ツールバー側は既に WRAP_CONTENT で伸びるようになっている)。
-+        isMultilineEligible = mFocused;
-         if (OmniboxFeatures.allowMultilineEditField() && !mIsInCct) {
-             setHorizontallyScrolling(!isMultilineEligible);
-         }
+     private void updateUrlBarForMultilineInput() {
+-        boolean wantWrap = mFocused && mCurrentInputCanBeWrapped;
++        // mobile-bex: 上流は mCurrentInputCanBeWrapped (= 入力に空白があるか。つまり
++        // 検索語かどうか) も条件にしている。URL には空白が無いので常に1行の横スクロールに
++        // なり、貼り付けた URL のドメインを直すのに先頭まで戻る必要があった。
++        // ブラウザとしては URL を扱う時間のほうが長いので、編集中は中身によらず折り返す。
++        boolean wantWrap = mFocused;
+         if (wantWrap == !isHorizontallyScrollable()) return;
+         setHorizontallyScrolling(!wantWrap);
+     }

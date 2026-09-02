@@ -7,10 +7,18 @@
 # Google 検索まで PC 版になってしまう (初版がこの不具合を出した)。
 # 初期設定には版番号を持たせ、内容を作り直したら一度だけ入れ直す。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-index 41b556c..4806572 100644
+index 7129ea2..6556f28 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-@@ -1350,6 +1350,10 @@ public class RootUiCoordinator
+@@ -322,6 +322,7 @@ public class RootUiCoordinator
+     protected final ActivityResultTracker mActivityResultTracker;
+     protected final OneshotSupplier<ChromeAndroidTask> mChromeAndroidTaskSupplier;
+ 
++
+     protected final ActivityTabProvider mActivityTabProvider;
+     protected MonotonicObservableSupplier<ShareDelegate> mShareDelegateSupplier;
+ 
+@@ -1663,6 +1664,10 @@ public class RootUiCoordinator
  
          DesktopSiteUtils.maybeDefaultEnableWindowSetting(mActivity, originalProfile);
  
@@ -34,10 +42,10 @@ index 7ec131d..93aa8d3 100644
  
  }  // namespace android
 diff --git a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
-index 13dd08d..3342ea6 100644
+index 028311d..04835a7 100644
 --- a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
 +++ b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
-@@ -56,6 +56,73 @@ public class DesktopSiteUtils {
+@@ -58,6 +58,73 @@ public class DesktopSiteUtils {
      static final int DEFAULT_GLOBAL_SETTING_DEFAULT_ON_SMALLEST_SCREEN_WIDTH_THRESHOLD_DP = 600;
      static final int DEFAULT_GLOBAL_SETTING_DEFAULT_ON_MEMORY_LIMIT_THRESHOLD_MB = 6500;
  
@@ -112,10 +120,10 @@ index 13dd08d..3342ea6 100644
       * Set or remove a domain level exception with URL for {@link
       * ContentSettingsType.REQUEST_DESKTOP_SITE}. Clear the subdomain level exception if any.
 diff --git a/components/content_settings/core/common/pref_names.h b/components/content_settings/core/common/pref_names.h
-index 6f03edb..81b7e06 100644
+index 57c8cc8..9991905 100644
 --- a/components/content_settings/core/common/pref_names.h
 +++ b/components/content_settings/core/common/pref_names.h
-@@ -279,6 +279,16 @@ inline constexpr char kRequestDesktopSiteGlobalSettingUserEnabled[] =
+@@ -291,6 +291,16 @@ inline constexpr char kRequestDesktopSiteGlobalSettingUserEnabled[] =
  // mobile site if the window is narrow.
  inline constexpr char kDesktopSiteWindowSettingEnabled[] =
      "desktop_site.window_setting";

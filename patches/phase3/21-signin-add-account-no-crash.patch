@@ -18,10 +18,10 @@
 #  getSuppressionStatus() も消している。errorprone の UnusedMethod が警告を出し、
 #  警告はエラー扱いなのでビルドが通らないため)
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
-index 97fd673..a90e2fc 100644
+index 7a2613c..7f7852d 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
-@@ -235,7 +235,13 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
+@@ -293,7 +293,13 @@ public class FirstRunActivity extends FirstRunActivityBase
  
      /** Creates first page and sets up adapter. Should result UI being shown on the screen. */
      private void createFirstPage() {
@@ -37,13 +37,13 @@ index 97fd673..a90e2fc 100644
          mFreProgressStates.add(MobileFreProgress.WELCOME_SHOWN);
          mPagerAdapter = new FirstRunPagerAdapter(FirstRunActivity.this, mPages);
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java b/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
-index 56af298..5e4db97 100644
+index 5aefc93..4a73d3a 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
-@@ -201,7 +201,9 @@ public class IdentityDiscController
+@@ -218,7 +218,9 @@ public class IdentityDiscController
  
          mButtonData.setButtonSpec(
-                 buttonSpecWithDrawableAndDescription(mButtonData.getButtonSpec(), email));
+                 buttonSpecWithDrawableAndDescription(mButtonData.getButtonSpec(), profileData));
 -        mButtonData.setCanShow(true);
 +        // mobile-bex: ツールバーのアカウントアイコンは出さない。端末へのアカウント
 +        // 追加に対応していないため、開いても操作できる項目がない (Patch 21)。
@@ -51,53 +51,11 @@ index 56af298..5e4db97 100644
      }
  
      private ButtonSpec buttonSpecWithDrawableAndDescription(
-diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/cards/SignInPromo.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/cards/SignInPromo.java
-index c8ba78d..9385ac5 100644
---- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/cards/SignInPromo.java
-+++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/cards/SignInPromo.java
-@@ -17,9 +17,7 @@ import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
- import org.chromium.chrome.browser.signin.services.ProfileDataCache;
- import org.chromium.chrome.browser.signin.services.SigninManager;
- import org.chromium.chrome.browser.signin.services.SigninManager.SignInStateObserver;
--import org.chromium.chrome.browser.signin.services.SigninPreferencesManager;
- import org.chromium.chrome.browser.ui.signin.SyncPromoController;
--import org.chromium.chrome.browser.ui.signin.signin_promo.NtpSigninPromoDelegate;
- import org.chromium.components.signin.AccountManagerFacade;
- import org.chromium.components.signin.AccountManagerFacadeProvider;
- import org.chromium.components.signin.AccountsChangeObserver;
-@@ -82,24 +80,9 @@ public abstract class SignInPromo {
-      * @return Whether the {@link SignInPromo} should be created.
-      */
-     public static boolean shouldCreatePromo() {
--        NtpSigninPromoDelegate.resetNtpSyncPromoLimitsIfHiddenForTooLong();
--        return !sDisablePromoForTests
--                && !ChromeSharedPreferences.getInstance()
--                        .readBoolean(ChromePreferenceKeys.SIGNIN_PROMO_NTP_PROMO_DISMISSED, false)
--                && !getSuppressionStatus();
--    }
--
--    private static boolean getSuppressionStatus() {
--        long suppressedFrom =
--                SigninPreferencesManager.getInstance()
--                        .getNewTabPageSigninPromoSuppressionPeriodStart();
--        if (suppressedFrom == 0) return false;
--        long currentTime = System.currentTimeMillis();
--        long suppressedTo = suppressedFrom + NtpSigninPromoDelegate.getSuppressionPeriodMs();
--        if (suppressedFrom <= currentTime && currentTime < suppressedTo) {
--            return true;
--        }
--        SigninPreferencesManager.getInstance().clearNewTabPageSigninPromoSuppressionPeriodStart();
-+        // mobile-bex: 新しいタブの「Chrome にログイン」カードは出さない。このビルドは
-+        // 端末にアカウントを追加できないため、ログインを勧めても何も起きない (Patch 21)。
-+        // 閉じても次のタブでまた出てくるので、そもそも作らないことにする。
-         return false;
-     }
- 
 diff --git a/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java b/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java
-index 5cf038f..b5293dd 100644
+index c7a41cd..5aa655b 100644
 --- a/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java
 +++ b/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/signin_promo/NtpSigninPromoDelegate.java
-@@ -171,7 +171,16 @@ public class NtpSigninPromoDelegate extends SigninPromoDelegate {
+@@ -173,7 +173,16 @@ public class NtpSigninPromoDelegate extends SigninPromoDelegate {
  
      @Override
      boolean canShowPromo() {

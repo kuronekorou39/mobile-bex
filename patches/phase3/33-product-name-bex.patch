@@ -14,23 +14,23 @@
 # 全部を機械的に置換すると、ライセンス表記のように「Chromium と名乗るのが正しい」
 # 箇所まで変わってしまう。
 diff --git a/chrome/app/chromium_strings.grd b/chrome/app/chromium_strings.grd
-index 2e36329..2b325be 100644
+index a741f89..e5952ce 100644
 --- a/chrome/app/chromium_strings.grd
 +++ b/chrome/app/chromium_strings.grd
-@@ -905,7 +905,7 @@ Chromium is unable to recover your settings.
+@@ -1019,7 +1019,7 @@ Chromium is unable to recover your settings.
        <if expr="enable_extensions_core">
          <!-- Extension installed bubble -->
          <message name="IDS_EXTENSION_INSTALLED_HEADING" desc="Title of the extension-installed bubble. Instructs that the extension was installed.">
 -          <ph name="EXTENSION_NAME">$1<ex>Gmail Checker</ex></ph> has been added to Chromium
 +          <ph name="EXTENSION_NAME">$1<ex>Gmail Checker</ex></ph> を BEX に追加しました
          </message>
- 
-         <!-- Extension uninstall prompt -->
+         <if expr="is_android">
+           <message name="IDS_EXTENSION_INSTALLED_MANAGE_INFO_IN_MAIN_MENU" desc="Text displayed in the post install dialog when the extensions menu is unpinned on Android informing them they can manage their extensions in the main menu.">
 diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-index 83a0c39..cc71dd9 100644
+index a7571d3..82f4c0e 100644
 --- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
 +++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-@@ -2141,7 +2141,7 @@ Your Google account may have other forms of browsing history like searches and a
+@@ -2150,7 +2150,7 @@ Your Google account may have other forms of browsing history like searches and a
  
        <!-- About Chrome preferences -->
        <message name="IDS_PREFS_ABOUT_CHROME" desc="Title for the About Chrome page. [CHAR_LIMIT=32]">
@@ -39,7 +39,7 @@ index 83a0c39..cc71dd9 100644
        </message>
        <message name="IDS_LEGAL_INFORMATION_SUMMARY" desc="Summary for legal information" meaning="Android">
          Copyright <ph name="year">%1$d<ex>2014</ex></ph> Google LLC. All rights reserved.
-@@ -4317,6 +4317,27 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -4372,6 +4372,27 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
        <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
          小窓表示
        </message>
@@ -67,7 +67,7 @@ index 83a0c39..cc71dd9 100644
        <message name="IDS_MENU_EXTENSIONS" desc="Menu item for opening the 'Extensions' page that allows the user to manage installed extensions. [CHAR_LIMIT=27]">
          Extensions
        </message>
-@@ -6531,7 +6552,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -6702,7 +6723,7 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
  
        <!-- Notification Permission Rationale Dialog Strings-->
        <message name="IDS_NOTIFICATION_PERMISSION_RATIONALE_DIALOG_TITLE" desc="The title of a dialog shown to users before asking for notification permission.">

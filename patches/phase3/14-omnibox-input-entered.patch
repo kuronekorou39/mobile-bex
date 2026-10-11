@@ -2,10 +2,10 @@
 # サジェスト選択後に finishInteraction を post してサジェストを閉じる修正を含む
 # (これがないとサジェストが遷移後のページを覆い続ける)。
 diff --git a/chrome/browser/android/omnibox/autocomplete_controller_android.cc b/chrome/browser/android/omnibox/autocomplete_controller_android.cc
-index 4dea27b..50424fa 100644
+index 5f19f71..140b521 100644
 --- a/chrome/browser/android/omnibox/autocomplete_controller_android.cc
 +++ b/chrome/browser/android/omnibox/autocomplete_controller_android.cc
-@@ -34,6 +34,8 @@
+@@ -33,6 +33,8 @@
  #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
  #include "chrome/browser/autocomplete/shortcuts_backend_factory.h"
  #include "chrome/browser/contextual_tasks/contextual_tasks_utils.h"
@@ -14,8 +14,8 @@ index 4dea27b..50424fa 100644
  #include "chrome/browser/omnibox/autocomplete_controller_emitter_factory.h"
  #include "chrome/browser/page_load_metrics/chrome_initiator_location.h"
  #include "chrome/browser/predictors/autocomplete_action_predictor.h"
-@@ -526,6 +528,45 @@ ScopedJavaLocalRef<jobject> AutocompleteControllerAndroid::
-   return url::GURLAndroid::FromNativeGURL(env, match->destination_url);
+@@ -509,6 +511,45 @@ GURL AutocompleteControllerAndroid::
+   return match->destination_url;
  }
  
 +bool AutocompleteControllerAndroid::ProcessExtensionKeywordMatch(
@@ -61,12 +61,12 @@ index 4dea27b..50424fa 100644
    // Cancel all pending actions and clear any remaining matches.
    autocomplete_controller_.reset();
 diff --git a/chrome/browser/android/omnibox/autocomplete_controller_android.h b/chrome/browser/android/omnibox/autocomplete_controller_android.h
-index a1f48ad..6ba0a70 100644
+index 48c03a8..8409028 100644
 --- a/chrome/browser/android/omnibox/autocomplete_controller_android.h
 +++ b/chrome/browser/android/omnibox/autocomplete_controller_android.h
-@@ -104,6 +104,14 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
-       JNIEnv* env,
-       uintptr_t match_ptr);
+@@ -90,6 +90,14 @@ class AutocompleteControllerAndroid : public AutocompleteController::Observer,
+       uintptr_t match_ptr,
+       int64_t elapsed_time_since_input_change);
  
 +  // Returns true if the match is an extension keyword match and the
 +  // onInputEntered event was dispatched to the extension. In that case,
@@ -80,10 +80,10 @@ index a1f48ad..6ba0a70 100644
    void Shutdown() override;
  
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java
-index 1d21355..50495cf 100644
+index 98ec119..6d9feb3 100644
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteController.java
-@@ -408,6 +408,23 @@ public class AutocompleteController {
+@@ -409,6 +409,23 @@ public class AutocompleteController {
                          mNativeController, match.getNativeObjectRef(), elapsedTimeSinceInputChange);
      }
  
@@ -107,7 +107,7 @@ index 1d21355..50495cf 100644
      /**
       * Pass the UI specific measurement information to Native code to aid Adaptive Suggestions.
       *
-@@ -564,5 +581,10 @@ public class AutocompleteController {
+@@ -566,5 +583,10 @@ public class AutocompleteController {
          /** Get TemplateUrl for the given text. */
          TemplateUrl getTemplateUrlForText(
                  long nativeAutocompleteControllerAndroid, @JniType("std::u16string") String text);
@@ -119,10 +119,10 @@ index 1d21355..50495cf 100644
      }
  }
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java
-index ebb0164..42fb35a 100644
+index f80fafc..d760de3 100644
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java
-@@ -1609,6 +1609,27 @@ class AutocompleteMediator
+@@ -1648,6 +1648,27 @@ class AutocompleteMediator
                      System.currentTimeMillis()
                              - assumeNonNull(mAutocompleteInput).getUrlFocusTime());
  

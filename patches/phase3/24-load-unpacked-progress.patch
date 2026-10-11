@@ -2,10 +2,10 @@
 # フォルダ選択後のコピー/検証に時間がかかるが画面に変化がなく、
 # 固まったように見えていたため。点線枠のカード + スピナーを出す。
 diff --git a/chrome/app/extensions_strings.grdp b/chrome/app/extensions_strings.grdp
-index 81bbf87..b9b6630 100644
+index ef5434a..a8c8d03 100644
 --- a/chrome/app/extensions_strings.grdp
 +++ b/chrome/app/extensions_strings.grdp
-@@ -553,6 +553,12 @@
+@@ -562,6 +562,12 @@
    <message name="IDS_EXTENSIONS_TOOLBAR_LOAD_UNPACKED_DONE" desc="Text displayed in a toast popup message when extension has been loaded.">
      Extension loaded
    </message>
@@ -84,7 +84,7 @@ index c0a7ca6..4a7b6fc 100644
  
    protected shouldShowEmptySearchMessage_(): boolean {
 diff --git a/chrome/browser/resources/extensions/manager.html.ts b/chrome/browser/resources/extensions/manager.html.ts
-index 43f1df6..350c00e 100644
+index 2d8fea7..5e79c56 100644
 --- a/chrome/browser/resources/extensions/manager.html.ts
 +++ b/chrome/browser/resources/extensions/manager.html.ts
 @@ -49,6 +49,7 @@ ${this.showDrawer_ ? html`
@@ -161,10 +161,10 @@ index 178a09a..d79bd6a 100644
      chrome.metricsPrivate.recordUserAction('Options_LoadUnpackedExtension');
    }
 diff --git a/chrome/browser/ui/webui/extensions/extensions_ui.cc b/chrome/browser/ui/webui/extensions/extensions_ui.cc
-index 4c382ee..6668517 100644
+index 68db74e..a236e29 100644
 --- a/chrome/browser/ui/webui/extensions/extensions_ui.cc
 +++ b/chrome/browser/ui/webui/extensions/extensions_ui.cc
-@@ -388,6 +388,10 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
+@@ -392,6 +392,10 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
        {"toolbarDevMode", IDS_EXTENSIONS_DEVELOPER_MODE},
        {"toolbarLoadUnpacked", IDS_EXTENSIONS_TOOLBAR_LOAD_UNPACKED},
        {"toolbarLoadUnpackedDone", IDS_EXTENSIONS_TOOLBAR_LOAD_UNPACKED_DONE},

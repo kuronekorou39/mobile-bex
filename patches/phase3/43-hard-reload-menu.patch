@@ -17,10 +17,10 @@
 # (PC の Ctrl+Shift+R も同じ)。特定サイトの Cookie を消したい場合は
 # メニューの (i) → 「Cookie とサイトデータ」から削除する。
 diff --git a/chrome/android/java/res/values/ids.xml b/chrome/android/java/res/values/ids.xml
-index 20f57d0..f7e1411 100644
+index 9559c8f..262cf7a 100644
 --- a/chrome/android/java/res/values/ids.xml
 +++ b/chrome/android/java/res/values/ids.xml
-@@ -180,6 +180,7 @@ found in the LICENSE file.
+@@ -182,6 +182,7 @@ found in the LICENSE file.
      <item type="id" name="auto_dark_web_contents_check_id" />
      <item type="id" name="auto_dark_web_contents_id" />
      <item type="id" name="back_menu_id" />
@@ -29,10 +29,10 @@ index 20f57d0..f7e1411 100644
      <item type="id" name="bex_pip_menu_id" />
      <item type="id" name="bookmark_bar_parent_menu_id" />
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-index 55bad29..612bb33 100644
+index 1b9c4e0..5235395 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-@@ -4541,6 +4541,14 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -4687,6 +4687,14 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                      getToolbarManager().getExtensionsToolbarCoordinator();
              coordinator.showExtensionsMenu();
              RecordUserAction.record("MobileMenuExtensionsMenu");
@@ -48,10 +48,10 @@ index 55bad29..612bb33 100644
              enterPictureInPictureFromMenu();
              RecordUserAction.record("MobileMenuBexPip");
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-index aae3e55..5a38a2f 100644
+index 51e4011..0a9ccd2 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-@@ -345,10 +345,20 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+@@ -334,10 +334,20 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
                                      R.id.icon_row_menu_id, iconModels, isMenuIconAtStart())));
          }
  
@@ -75,7 +75,7 @@ index aae3e55..5a38a2f 100644
              modelList.add(
                      new MVCListAdapter.ListItem(
                              AppMenuHandler.AppMenuItemType.DIVIDER,
-@@ -1098,6 +1108,19 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+@@ -1087,6 +1097,19 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
                          isMenuIconAtStart()));
      }
  
@@ -92,14 +92,14 @@ index aae3e55..5a38a2f 100644
 +                        isMenuIconAtStart()));
 +    }
 +
-     private boolean shouldShowExtensionsItem() {
-         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
-         return ExtensionUi.isEnabled(getProfileFromTabModel());
+     private boolean shouldShowSaveAndShareItem(
+             @Nullable Tab currentTab,
+             boolean isNativePage,
 diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-index 82f4c0e..8ca4a72 100644
+index 9a865d7..ffdb8b9 100644
 --- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
 +++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-@@ -4372,6 +4372,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -4396,6 +4396,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
        <message name="IDS_BEX_MENU_PIP" desc="Menu item that shrinks the browser into a small floating window (picture-in-picture), so the user can keep watching a stream while using other apps.">
          小窓表示
        </message>

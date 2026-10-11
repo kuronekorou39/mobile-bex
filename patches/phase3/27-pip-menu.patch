@@ -3,10 +3,10 @@
 # 並べるような拡張機能では使えない。動画の有無に関係なく Activity ごと
 # 小窓化する (Custom Tab の最小化と同じ手法)。
 diff --git a/chrome/android/java/res/values/ids.xml b/chrome/android/java/res/values/ids.xml
-index 157ce83..20f57d0 100644
+index 3e9b5ff..9559c8f 100644
 --- a/chrome/android/java/res/values/ids.xml
 +++ b/chrome/android/java/res/values/ids.xml
-@@ -180,6 +180,8 @@ found in the LICENSE file.
+@@ -182,6 +182,8 @@ found in the LICENSE file.
      <item type="id" name="auto_dark_web_contents_check_id" />
      <item type="id" name="auto_dark_web_contents_id" />
      <item type="id" name="back_menu_id" />
@@ -16,7 +16,7 @@ index 157ce83..20f57d0 100644
      <item type="id" name="bookmark_bar_state_always_hide_menu_id" />
      <item type="id" name="bookmark_bar_state_always_show_menu_id" />
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-index 599dfa8..55bad29 100644
+index 6a9d0fa..1b9c4e0 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 @@ -16,6 +16,7 @@ import static org.chromium.chrome.browser.ui.IncognitoRestoreAppLaunchDrawBlocke
@@ -27,7 +27,7 @@ index 599dfa8..55bad29 100644
  import android.app.Activity;
  import android.app.ApplicationStartInfo;
  import android.content.Context;
-@@ -30,6 +31,7 @@ import android.os.Bundle;
+@@ -29,6 +30,7 @@ import android.os.Bundle;
  import android.os.PersistableBundle;
  import android.os.SystemClock;
  import android.provider.Browser;
@@ -35,7 +35,7 @@ index 599dfa8..55bad29 100644
  import android.text.TextUtils;
  import android.text.format.DateUtils;
  import android.util.Pair;
-@@ -437,6 +439,9 @@ import java.util.function.Supplier;
+@@ -442,6 +444,9 @@ import java.util.function.Supplier;
   * accessible via a chrome specific tab switching UI.
   */
  public class ChromeTabbedActivity extends ChromeActivity implements PreAttachIntentObserver {
@@ -45,7 +45,7 @@ index 599dfa8..55bad29 100644
      // Name of the ChromeTabbedActivity alias that handles MAIN intents.
      public static final String MAIN_LAUNCHER_ACTIVITY_NAME = "com.google.android.apps.chrome.Main";
  
-@@ -643,6 +648,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -663,6 +668,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
      private HistoricalTabModelObserver mHistoricalTabModelObserver;
      private UndoRefocusHelper mUndoRefocusHelper;
      private BrowserControlsVisibilityDelegate mVrBrowserControlsVisibilityDelegate;
@@ -55,7 +55,7 @@ index 599dfa8..55bad29 100644
      private boolean mUiWithNativeInitialized;
      private LocaleManager mLocaleManager;
      private Runnable mShowHistoryRunnable;
-@@ -1892,6 +1900,32 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -1914,6 +1922,32 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
          }
      }
  
@@ -88,7 +88,7 @@ index 599dfa8..55bad29 100644
      @Override
      public void onNewIntent(Intent intent) {
          try (TraceEvent e = TraceEvent.scoped("ChromeTabbedActivity.onNewIntent")) {
-@@ -4507,6 +4541,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -4653,6 +4687,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                      getToolbarManager().getExtensionsToolbarCoordinator();
              coordinator.showExtensionsMenu();
              RecordUserAction.record("MobileMenuExtensionsMenu");
@@ -98,7 +98,7 @@ index 599dfa8..55bad29 100644
          } else if (id == R.id.manage_extensions_menu_id) {
              LoadUrlParams params =
                      new LoadUrlParams(
-@@ -5548,6 +5585,35 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -5716,6 +5753,35 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                                          currentStandardTab.getUrl().getSpec()));
      }
  
@@ -135,7 +135,7 @@ index 599dfa8..55bad29 100644
      public void onEnterVr() {
          super.onEnterVr();
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-index e4548b2..b502c36 100644
+index c16621b..c56b5e0 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 @@ -7,6 +7,7 @@ package org.chromium.chrome.browser.tabbed_mode;
@@ -146,7 +146,7 @@ index e4548b2..b502c36 100644
  import android.content.res.Resources;
  import android.graphics.drawable.Drawable;
  import android.util.SparseArray;
-@@ -344,6 +345,16 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+@@ -333,6 +334,16 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
                                      R.id.icon_row_menu_id, iconModels, isMenuIconAtStart())));
          }
  
@@ -163,7 +163,7 @@ index e4548b2..b502c36 100644
          mUpdateMenuItemVisible = shouldShowUpdateMenuItem();
          Profile profile = getProfileFromTabModel();
          if (mUpdateMenuItemVisible) {
-@@ -1065,6 +1076,28 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+@@ -1054,6 +1065,28 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
                          isMenuIconAtStart()));
      }
  
@@ -189,14 +189,14 @@ index e4548b2..b502c36 100644
 +                        isMenuIconAtStart()));
 +    }
 +
-     private boolean shouldShowExtensionsItem() {
-         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
-         return ExtensionUi.isEnabled(getProfileFromTabModel());
+     private boolean shouldShowSaveAndShareItem(
+             @Nullable Tab currentTab,
+             boolean isNativePage,
 diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-index ef4012b..a7571d3 100644
+index 6fcf7f3..a74bee7 100644
 --- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
 +++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
-@@ -4369,6 +4369,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
+@@ -4393,6 +4393,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
        <message name="IDS_MENU_WINDOW_TITLE_WITH_TAB_COUNT" desc="Format string to display a window title followed by the number of tabs in that window, for example 'Window 1 - 5 tabs'. [CHAR_LIMIT=27]">
          <ph name="WINDOW_TITLE">%1$s<ex>Window name</ex></ph> - <ph name="TAB_COUNT">%2$s<ex>5 tabs</ex></ph>
        </message>

@@ -18,7 +18,7 @@
 # 副作用: URL を打っている最中も行が増減するので、ツールバーの高さが変わる
 # (上流の WRAP_CONTENT の作りに乗っているだけで、追加の実装はしていない)。
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java
-index b4e7d9d..251b5bf 100644
+index 6eec846..528d7dc 100644
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarPhone.java
 @@ -355,7 +355,13 @@ class LocationBarPhone extends LocationBarLayout {
@@ -37,16 +37,17 @@ index b4e7d9d..251b5bf 100644
          // Reset scroll position to 0 when centering. Otherwise, if the previous URL was long
          // and scrolled, the short centered URL might remain scrolled out of view.
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
-index ee9cd85..6c1a8c1 100644
+index e320419..7e5d989 100644
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java
-@@ -507,7 +507,11 @@ public class UrlBar extends AutocompleteEditText {
+@@ -529,7 +529,12 @@ public class UrlBar extends AutocompleteEditText {
      }
  
      private void updateUrlBarForMultilineInput() {
--        boolean wantWrap = mFocused && mCurrentInputCanBeWrapped;
+-        boolean wantWrap = mAllowMultilineInput && mFocused && mCurrentInputCanBeWrapped;
 +        // mobile-bex: 上流は mCurrentInputCanBeWrapped (= 入力に空白があるか。つまり
-+        // 検索語かどうか) も条件にしている。URL には空白が無いので常に1行の横スクロールに
++        // 検索語かどうか) と mAllowMultilineInput (155 で追加された呼び出し側の許可) も
++        // 条件にしている。URL には空白が無いので常に1行の横スクロールに
 +        // なり、貼り付けた URL のドメインを直すのに先頭まで戻る必要があった。
 +        // ブラウザとしては URL を扱う時間のほうが長いので、編集中は中身によらず折り返す。
 +        boolean wantWrap = mFocused;

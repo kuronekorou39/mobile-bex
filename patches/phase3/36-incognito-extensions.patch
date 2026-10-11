@@ -18,10 +18,10 @@
 # なお 147 で必要だった tabs_api.cc の CHECK 回避は、上流が同じ修正を入れたので
 # (crbug.com/501003339) 削除した。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java
-index 67ce688..ace7943 100644
+index 2c3968a..1607d0d 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/app/ChromeActivity.java
-@@ -200,6 +200,8 @@ import org.chromium.chrome.browser.tab.TabSelectionType;
+@@ -201,6 +201,8 @@ import org.chromium.chrome.browser.tab.TabSelectionType;
  import org.chromium.chrome.browser.tab.TabState;
  import org.chromium.chrome.browser.tab.TabUtils;
  import org.chromium.chrome.browser.tab_ui.TabContentManager;
@@ -30,7 +30,7 @@ index 67ce688..ace7943 100644
  import org.chromium.chrome.browser.tabmodel.SupportedProfileType;
  import org.chromium.chrome.browser.tabmodel.TabCreator;
  import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
-@@ -1152,6 +1154,33 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
+@@ -1150,6 +1152,33 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
              assert profile != null;
              addWindowingFeatures(chromeAndroidTask, profile, activityWindowAndroid);
  

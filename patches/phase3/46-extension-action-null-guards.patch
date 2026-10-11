@@ -10,10 +10,10 @@
 # どちらも「知らない ID なら何もしない」を返すようにする。ホーム画面ショートカットの
 # ように、ツールバーの外から ID を指定する経路で踏む。
 diff --git a/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc b/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
-index 7cd262f..189710d 100644
+index 875e30c..36fe938 100644
 --- a/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
 +++ b/chrome/browser/ui/android/extensions/extensions_toolbar_android.cc
-@@ -207,6 +207,14 @@ base::android::ScopedJavaLocalRef<jobject> ExtensionsToolbarAndroid::GetAction(
+@@ -221,6 +221,14 @@ base::android::ScopedJavaLocalRef<jobject> ExtensionsToolbarAndroid::GetAction(
    ToolbarActionViewModel* action =
        toolbar_view_model_->GetActionModelForId(action_id);
  

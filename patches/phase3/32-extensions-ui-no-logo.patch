@@ -6,7 +6,7 @@
 # このブラウザは Chromium ではないので名乗りとして誤りだし、拡張機能ページの
 # 見出しに製品ロゴは要らないため、画像を差し替えるのではなく消す。
 diff --git a/chrome/browser/resources/extensions/manager.html.ts b/chrome/browser/resources/extensions/manager.html.ts
-index 350c00e..0efe1db 100644
+index 5e79c56..0ba6b74 100644
 --- a/chrome/browser/resources/extensions/manager.html.ts
 +++ b/chrome/browser/resources/extensions/manager.html.ts
 @@ -29,13 +29,7 @@ ${this.showDrawer_ ? html`

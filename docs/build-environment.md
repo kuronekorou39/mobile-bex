@@ -51,8 +51,8 @@ depth=1 で取る**こと。`--with_tags` を付けて `gclient sync` すると�
 20GB 超の無駄なダウンロードになる（実際にやってしまった）。
 
 ```bash
-git fetch --depth=1 origin refs/tags/153.0.8010.18:refs/tags/153.0.8010.18
-git checkout --detach 153.0.8010.18
+git fetch --depth=1 origin refs/tags/155.0.8059.40:refs/tags/155.0.8059.40
+git checkout --detach 155.0.8059.40
 gclient sync -D
 ```
 
@@ -205,7 +205,10 @@ ccache -M 50G
 
 ## 9. 対象Chromiumバージョン
 
-- **現在の土台**: Chromium 153.0.8010.18（Android の Stable、2026-08-26）
+- **現在の土台**: Chromium 155.0.8059.40（Android の Stable、2026-10-07）
+- 2026-10 に 153.0.8010.18 から載せ替えた。きっかけは CVE-2026-102322
+  （SiteIsolation の認可不備。155.0.8059.39 より前が対象）。修正コミットは
+  非公開で特定できず、個別の取り込みはできなかった
 - 2026-09 に 147.0.7692.0 から載せ替えた。経緯と、そのとき上流に取り込まれて
   不要になったパッチは `patches/README.md` の「欠番について」を参照
 - 実機検証は Pixel 9a / Android 17 で実施

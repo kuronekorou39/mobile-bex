@@ -6,10 +6,10 @@
 # 受け側 (ExtensionsToolbarCoordinator#maybeCreate) の引数は ViewGroup rootView で、
 # タブレット固有の型を要求していない。キャストを外して素直に渡す。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
-index d2a0603..129b6ba 100644
+index 1d8b14d..c243e7a 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
-@@ -2687,7 +2687,13 @@ public class ToolbarManager
+@@ -2765,7 +2765,13 @@ public class ToolbarManager
                                                          mActivityTabProvider.asObservable(),
                                                          mTabCreatorManager.getTabCreator(false),
                                                          getBrowsingModeThemeColorProvider(),

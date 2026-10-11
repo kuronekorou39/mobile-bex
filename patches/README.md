@@ -21,7 +21,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 
 ## Phase 3 パッチ一覧 (UX最適化)
 
-全パッチは clean な Chromium 153.0.8010.18 への番号順フル適用で作業ツリーと
+全パッチは clean な Chromium 155.0.8059.40 への番号順フル適用で作業ツリーと
 完全一致することを検証済み（`python3 scripts/regen-patches.py`）。
 欠番があるのは、上流が同じ修正を取り込んだか、作り直しのため一時的に外した
 パッチがあるため（下記「欠番について」を参照）。
@@ -30,10 +30,6 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 |---|-----------|------|
 | 01 | `01-toolbar-phone-extension-stub.patch` | toolbar_phone.xml に拡張機能ツールバー用の ViewStub を追加 |
 | 02 | `02-toolbar-phone-extension-coordinator.patch` | 拡張機能ツールバーの生成をタブレット限定にしない（キャストを外す） |
-| 07 | `07-sidepanel-permission-allow.patch` | sidePanel パーミッション許可 |
-| 08 | `08-sidepanel-api-stub.patch` | chrome.sidePanel API スタブ |
-| 11 | `11-sidepanel-overlay.patch` | sidePanel の右スライドオーバーレイ実装 (Java/res/BUILD.gn) |
-| 12 | `12-sidepanel-open-service-worker-fix.patch` | sidePanel C++ 側修正（SWからの open() / onClicked 許可） |
 | 14 | `14-omnibox-input-entered.patch` | omnibox onInputEntered 発火 + サジェスト閉じ修正 |
 | 15 | `15-extensions-webui-mobile.patch` | chrome://extensions のスマホ幅表示対応 |
 | 17 | `17-newtab-native-url-overriding.patch` | NTPオーバーライド用フラグ有効化 |
@@ -65,6 +61,18 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 
 **05 / 06** (popup-max-width / popup-open-as-tab): ポップアップ表示の中間形態。
 09 の BottomSheet 方式で置き換えられたため削除。
+
+**Chromium 155 へのリベース (2026-10) で外したもの**
+
+上流 155 に Android 用の sidePanel 実装が入った（`chrome/browser/ui/android/extensions/side_panel/`、
+`side_panel_api.cc` が Android でもビルド対象になった）。
+
+| # | 元の内容 | 外した理由 |
+|---|---------|-----------|
+| 07 | sidePanel パーミッション許可 | 上流が `_permission_features.json` に `desktop_android` を追加した |
+| 08 | chrome.sidePanel API スタブ | 上流の本物の API 実装と同じ BUILD.gn に入るため共存できない |
+| 11 | sidePanel の右スライドオーバーレイ | 08 のスタブから呼ばれる UI。上流の実装をまず素の状態で使ってみる |
+| 12 | sidePanel の onClicked 許可 | 08 のスタブ前提の回避策 |
 
 **Chromium 153 へのリベース (2026-09) で外したもの**
 

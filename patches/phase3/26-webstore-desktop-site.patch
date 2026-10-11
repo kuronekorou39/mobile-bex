@@ -7,18 +7,18 @@
 # Google 検索まで PC 版になってしまう (初版がこの不具合を出した)。
 # 初期設定には版番号を持たせ、内容を作り直したら一度だけ入れ直す。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-index 7129ea2..6556f28 100644
+index 0e1e8a3..a8392a9 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-@@ -322,6 +322,7 @@ public class RootUiCoordinator
-     protected final ActivityResultTracker mActivityResultTracker;
+@@ -325,6 +325,7 @@ public class RootUiCoordinator
+     protected final MultiWindowModeStateDispatcher mMultiWindowModeStateDispatcher;
      protected final OneshotSupplier<ChromeAndroidTask> mChromeAndroidTaskSupplier;
  
 +
      protected final ActivityTabProvider mActivityTabProvider;
      protected MonotonicObservableSupplier<ShareDelegate> mShareDelegateSupplier;
  
-@@ -1663,6 +1664,10 @@ public class RootUiCoordinator
+@@ -1699,6 +1700,10 @@ public class RootUiCoordinator
  
          DesktopSiteUtils.maybeDefaultEnableWindowSetting(mActivity, originalProfile);
  

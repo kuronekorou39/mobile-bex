@@ -18,7 +18,7 @@
 #  getSuppressionStatus() も消している。errorprone の UnusedMethod が警告を出し、
 #  警告はエラー扱いなのでビルドが通らないため)
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
-index 7a2613c..7f7852d 100644
+index 1679a58..f6f96d0 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java
 @@ -293,7 +293,13 @@ public class FirstRunActivity extends FirstRunActivityBase
@@ -37,7 +37,7 @@ index 7a2613c..7f7852d 100644
          mFreProgressStates.add(MobileFreProgress.WELCOME_SHOWN);
          mPagerAdapter = new FirstRunPagerAdapter(FirstRunActivity.this, mPages);
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java b/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
-index 5aefc93..4a73d3a 100644
+index b432bdd..c9ff0e9 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/identity_disc/IdentityDiscController.java
 @@ -218,7 +218,9 @@ public class IdentityDiscController

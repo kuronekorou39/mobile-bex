@@ -11,10 +11,10 @@
 # インスタンス数の上限 (getMaxInstances) は端末のメモリ量で決まるので触っていない。
 # Pixel 9a では 20 まで許可される。
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-index b502c36..aae3e55 100644
+index c56b5e0..51e4011 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
-@@ -1719,14 +1719,18 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
+@@ -1637,14 +1637,18 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
              if (MultiWindowUtils.getInstanceCount(PersistedInstanceType.ACTIVE)
                      >= MultiWindowUtils.getMaxInstances()) return false;
  

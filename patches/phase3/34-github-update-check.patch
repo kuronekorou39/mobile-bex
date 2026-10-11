@@ -180,10 +180,10 @@ index 70db74f..e511211 100644
  
      @Override
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-index 6556f28..16a7353 100644
+index a8392a9..b34be57 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java
-@@ -120,6 +120,7 @@ import org.chromium.chrome.browser.layouts.LayoutType;
+@@ -121,6 +121,7 @@ import org.chromium.chrome.browser.layouts.LayoutType;
  import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
  import org.chromium.chrome.browser.lifecycle.DestroyObserver;
  import org.chromium.chrome.browser.lifecycle.InflationObserver;
@@ -191,7 +191,7 @@ index 6556f28..16a7353 100644
  import org.chromium.chrome.browser.lifecycle.NativeInitObserver;
  import org.chromium.chrome.browser.lifecycle.WindowFocusChangedObserver;
  import org.chromium.chrome.browser.media.TabSharingToolbarUiCoordinator;
-@@ -1668,6 +1669,10 @@ public class RootUiCoordinator
+@@ -1704,6 +1705,10 @@ public class RootUiCoordinator
          // 初回のみデスクトップ表示を既定にする。
          DesktopSiteUtils.maybeDefaultEnableWebStoreDesktopSite(originalProfile);
  

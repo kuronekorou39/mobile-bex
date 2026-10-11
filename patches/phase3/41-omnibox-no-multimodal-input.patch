@@ -23,10 +23,10 @@
 # disable_fieldtrial_testing_config = true を入れて丸ごと切る手もある
 # (製品版 Chrome の既定に揃う)。影響範囲が広いので、そちらは別途判断する。
 diff --git a/testing/variations/fieldtrial_testing_config.json b/testing/variations/fieldtrial_testing_config.json
-index a44a0a1..157a777 100644
+index 1dd6bb1..1b3b7e4 100644
 --- a/testing/variations/fieldtrial_testing_config.json
 +++ b/testing/variations/fieldtrial_testing_config.json
-@@ -17959,28 +17959,6 @@
+@@ -14222,28 +14222,6 @@
              ]
          }
      ],

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サイト分離の観察: 親ページ</title>
+<style>
+  body { font-family: sans-serif; margin: 1em; line-height: 1.6; }
+  iframe { width: 100%; height: 9em; border: 2px solid #c33; }
+  code { background: #eee; padding: 0 .3em; }
+  .box { border: 1px solid #999; padding: .6em; margin: 1em 0; }
+</style>
+</head>
+<body>
+<h1>親ページ（攻撃側サイトの役）</h1>
+<p>このページのサイト: <code id="self"></code></p>
+
+<div class="box">
+  <p>下の枠は別サイト <code id="other"></code> を iframe で埋め込んでいる。</p>
+  <iframe id="frame"></iframe>
+</div>
+
+<h2>見るところ</h2>
+<ol>
+  <li>別タブで <code>chrome://process-internals</code> を開く</li>
+  <li>General タブの Site Isolation mode を確認する</li>
+  <li>Frame Trees タブで、このページと iframe の Process ID を比べる
+    <ul>
+      <li>同じ → 2つのサイトが1つのレンダラープロセスに同居している</li>
+      <li>違う → iframe は別プロセスに分離されている</li>
+    </ul>
+  </li>
+  <li><a id="login" href="#">被害側サイトのログインページ</a>でパスワード欄に何か入力し、
+    このページを新しいタブで開き直して 3 をもう一度確認する
+    （パスワードを入力したサイトは、以後分離対象になる）</li>
+</ol>
+
+<script>
+// localhost と 127.0.0.1 は同じサーバーだが、ブラウザから見ると別サイトになる
+const otherHost = location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+const otherOrigin = `${location.protocol}//${otherHost}:${location.port}`;
+document.getElementById('self').textContent = location.origin;
+document.getElementById('other').textContent = otherOrigin;
+document.getElementById('frame').src = `${otherOrigin}/child.html`;
+document.getElementById('login').href = `${otherOrigin}/login.html`;
+</script>
+</body>
+</html>

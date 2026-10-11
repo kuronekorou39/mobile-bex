@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サイト分離の観察: ログインページ</title>
+<style>body { font-family: sans-serif; margin: 1em; line-height: 1.6; }</style>
+</head>
+<body>
+<h1>ログインページ（被害側サイトの役）</h1>
+<p>このページのサイト: <code id="self"></code></p>
+<p>どこにも送信しない。パスワード欄への入力をブラウザに検知させるためだけのフォーム。</p>
+<form onsubmit="return false">
+  <p><input type="text" autocomplete="username" placeholder="ユーザー名"></p>
+  <p><input type="password" autocomplete="current-password" placeholder="パスワード（適当な文字でよい）"></p>
+</form>
+<p>入力したら<a id="back" href="#">親ページ</a>を新しいタブで開き直す。</p>
+<script>
+const otherHost = location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+document.getElementById('self').textContent = location.origin;
+document.getElementById('back').href = `${location.protocol}//${otherHost}:${location.port}/`;
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>サイト分離の観察: 埋め込まれる側</title>
+<style>body { font-family: sans-serif; margin: .6em; }</style>
+</head>
+<body>
+<strong>埋め込まれた別サイト（被害側サイトの役）</strong>
+<p>このフレームのサイト: <code id="self"></code></p>
+<p>このフレームだけが持つ値: <code id="secret"></code></p>
+<script>
+document.getElementById('self').textContent = location.origin;
+// 親ページの JS からは同一オリジンポリシーで読めない値。プロセスが同居していると、
+// レンダラーを乗っ取られた場合にメモリ上では同じプロセス内に置かれることになる
+document.getElementById('secret').textContent = crypto.randomUUID();
+</script>
+</body>
+</html>

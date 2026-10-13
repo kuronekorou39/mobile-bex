@@ -1,0 +1,214 @@
+# Patch 47: 幅の狭いウィンドウではサイドパネルをページに重ねて出す
+# Chromium 155 に載せ替えてから、スマホの縦画面でサイドパネルが開かなくなった
+# (v0.3.2)。上流のサイドパネルはページと横並びにする方式しか持たず、ページ側に
+# 最低 412dp (MIN_WEB_CONTENTS_WIDTH_DP) を残したうえで、余りが 200dp 強に届かないと
+# 表示幅 0、つまり「開けない」と判定する。縦持ちのスマホは全幅が 360〜450dp なので
+# 余りは常に足りない。横向きにすれば開くことは実機 (Pixel 9a) で確認した。
+#
+# ページの横に残る幅が 360dp (サイドパネルの標準幅) に届かないウィンドウでは:
+#   - サイドパネルには、ページの取り分を引かないウィンドウ幅を渡す (開けるようになる)
+#   - SideUiObserver と getCurrentSideUiSpecs() にはサイドパネルの幅を 0 と伝える。
+#     オブザーバーは受け取った幅のぶんだけページやツールバーを縮めるので、0 と
+#     伝えることでページはそのまま、パネルだけが上に重なる
+#   - 回転で横並びと重ね表示が切り替わるときは、パネルの幅が変わらなくても
+#     オブザーバーに通知し直す (しないとページの幅が前の向きのまま残る)
+#   - 上マージン 0 を異常として例外を投げる上流の検査は、重ね表示では外す
+#     (ツールバーを下に置く構成で落ちるのを避ける)
+#
+# 旧 Patch 08/11/12 (BEX 独自のオーバーレイ) を戻さなかったのは、上流の sidePanel
+# API 実装と二重になるため。上流の配置ロジックに重ね表示を足すだけにした。
+diff --git a/chrome/browser/ui/side_ui/internal/android/java/src/org/chromium/chrome/browser/ui/side_ui/SideUiCoordinatorImpl.java b/chrome/browser/ui/side_ui/internal/android/java/src/org/chromium/chrome/browser/ui/side_ui/SideUiCoordinatorImpl.java
+index 5cf884d..137c759 100644
+--- a/chrome/browser/ui/side_ui/internal/android/java/src/org/chromium/chrome/browser/ui/side_ui/SideUiCoordinatorImpl.java
++++ b/chrome/browser/ui/side_ui/internal/android/java/src/org/chromium/chrome/browser/ui/side_ui/SideUiCoordinatorImpl.java
+@@ -66,6 +66,11 @@ final class SideUiCoordinatorImpl
+ 
+     private static final long TRANSITION_DURATION_MS = 350L;
+ 
++    // BEX: ページの横に残る幅がこの値 (サイドパネルの標準幅) に届かないウィンドウでは、
++    // サイドパネルをページに重ねて出す。上流は横並びしか持たず、幅が足りないとパネルを
++    // 閉じるので、縦持ちのスマホではサイドパネルが開けなかった。
++    private static final int SIDE_PANEL_OVERLAY_BELOW_AVAILABLE_WIDTH_DP = 360;
++
+     private final Activity mParentActivity;
+     private final ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
+     private final TopControlsStacker mTopControlsStacker;
+@@ -115,6 +120,9 @@ final class SideUiCoordinatorImpl
+      */
+     private boolean mIsUpdatingUi;
+ 
++    /** BEX: 直前の UI 更新が重ね表示だったか。切り替わりを SideUiObserver に伝えるために持つ。 */
++    private boolean mWasSidePanelOverlay;
++
+     /**
+      * Constructor for a {@link SideUiCoordinatorImpl}.
+      *
+@@ -281,7 +289,7 @@ final class SideUiCoordinatorImpl
+     @Override
+     public SideUiSpecs getCurrentSideUiSpecs() {
+         ThreadUtils.assertOnUiThread();
+-        return getCurrentSideUiSpecsInternal();
++        return toObserverSpecs(getCurrentSideUiSpecsInternal());
+     }
+ 
+     @Override
+@@ -290,7 +298,8 @@ final class SideUiCoordinatorImpl
+         @Px int windowWidth = getWindowWidth();
+         @Px int minWebContentsWidth = ViewUtils.dpToPx(mParentActivity, MIN_WEB_CONTENTS_WIDTH_DP);
+         boolean isFullscreen = mFullscreenManager.getPersistentFullscreenMode();
+-        return determineSideUiSpecs(windowWidth, minWebContentsWidth, isFullscreen, tab);
++        return toObserverSpecs(
++                determineSideUiSpecs(windowWidth, minWebContentsWidth, isFullscreen, tab));
+     }
+ 
+     @Override
+@@ -502,12 +511,19 @@ final class SideUiCoordinatorImpl
+         updateBrowserControlsVisibility(newSideUiSpecs);
+ 
+         // 8. Commit the new SideUiSpecs.
+-        if (!sideUiSpecsDiff.isEmpty() || !topMarginDiff.isEmpty()) {
++        // BEX: 画面の回転などで横並びと重ね表示が切り替わると、パネルの幅は同じままページ側の
++        // 幅だけが変わる。差分が空でもオブザーバーへ通知し直す。
++        boolean isSidePanelOverlay = isSidePanelOverlay(windowWidth, minWebContentsWidth);
++        boolean overlayChanged = isSidePanelOverlay != mWasSidePanelOverlay;
++        mWasSidePanelOverlay = isSidePanelOverlay;
++        if (!sideUiSpecsDiff.isEmpty() || !topMarginDiff.isEmpty() || overlayChanged) {
+             var uiUpdateSpecs =
+                     new SideUiUpdateSpecs(
+                             currentSideUiSpecs, newSideUiSpecs, sideUiSpecsDiff, topMarginDiff);
+             @Nullable TransitionSet transitionSet =
+-                    suppressAnimations ? null : collectTransitions(uiUpdateSpecs);
++                    suppressAnimations || overlayChanged
++                            ? null
++                            : collectTransitions(uiUpdateSpecs);
+             commitNewSideUiSpecs(uiUpdateSpecs, transitionSet);
+             mWebContentsHairlineManager.update();
+         }
+@@ -621,7 +637,14 @@ final class SideUiCoordinatorImpl
+ 
+         for (var container : mSideUiContainers) {
+             int showableWidth =
+-                    container.determineShowableSize(availableWidth, windowWidth, isFullscreen)
++                    container.determineShowableSize(
++                                    getAvailableWidthFor(
++                                            container,
++                                            availableWidth,
++                                            windowWidth,
++                                            minWebContentsWidth),
++                                    windowWidth,
++                                    isFullscreen)
+                             .mWidth;
+             if (showableWidth > 0) {
+                 showableSideUiIds.add(container.getSideUiId());
+@@ -683,7 +706,13 @@ final class SideUiCoordinatorImpl
+             SideUiSize newSideUiSize =
+                     container.hasContentToShow(tab)
+                             ? container.determineShowableSize(
+-                                    availableWidth, windowWidth, isFullscreen)
++                                    getAvailableWidthFor(
++                                            container,
++                                            availableWidth,
++                                            windowWidth,
++                                            minWebContentsWidth),
++                                    windowWidth,
++                                    isFullscreen)
+                             : new SideUiSize(0, HeightType.NOT_APPLICABLE);
+             sideUiSpecs.put(container.getAnchorSide(), newSideUiSize);
+             availableWidth = Math.max(availableWidth - newSideUiSize.mWidth, 0);
+@@ -744,7 +773,8 @@ final class SideUiCoordinatorImpl
+         }
+ 
+         List<Transition> transitions =
+-                mSideUiObserverNotifier.notifyPreSideUiSpecsChange(uiUpdateSpecs.mNewSpecs);
++                mSideUiObserverNotifier.notifyPreSideUiSpecsChange(
++                        toObserverSpecs(uiUpdateSpecs.mNewSpecs));
+         for (var transition : transitions) {
+             transitionSet.addTransition(transition);
+         }
+@@ -782,6 +812,7 @@ final class SideUiCoordinatorImpl
+             if (sideUiContainer.getSideUiId() == SideUiId.SIDE_PANEL
+                     && !mFullscreenManager.getPersistentFullscreenMode()
+                     && !DeviceInfo.isAutomotive()
++                    && !isSidePanelOverlay()
+                     && topMargin <= 0) {
+                 throw new IllegalStateException(
+                         "Side panel's anchor container should have a positive top margin. See"
+@@ -864,7 +895,8 @@ final class SideUiCoordinatorImpl
+ 
+                         notifyContainersOnUiUpdateCompleted(
+                                 uiUpdateSpecs.mCurrentSpecs, uiUpdateSpecs.mNewSpecs);
+-                        mSideUiObserverNotifier.notifyTransitionEnded(uiUpdateSpecs.mNewSpecs);
++                        mSideUiObserverNotifier.notifyTransitionEnded(
++                                toObserverSpecs(uiUpdateSpecs.mNewSpecs));
+                     }
+                 });
+         transitionSet.addListener(mSideUiTransitionListener);
+@@ -889,7 +921,7 @@ final class SideUiCoordinatorImpl
+                     anchorContainer, sideUiContainer, anchorSide, oldWidth, newWidth);
+         }
+ 
+-        mSideUiObserverNotifier.notifyTransitionBegun(newSideUiSpecs);
++        mSideUiObserverNotifier.notifyTransitionBegun(toObserverSpecs(newSideUiSpecs));
+     }
+ 
+     private void commitNewSpecsForStaticResize(SideUiUpdateSpecs uiUpdateSpecs) {
+@@ -945,7 +977,7 @@ final class SideUiCoordinatorImpl
+         }
+ 
+         notifyContainersOnUiUpdateCompleted(currentSideUiSpecs, newSideUiSpecs);
+-        mSideUiObserverNotifier.notifySideUiSpecsChanged(newSideUiSpecs);
++        mSideUiObserverNotifier.notifySideUiSpecsChanged(toObserverSpecs(newSideUiSpecs));
+     }
+ 
+     /**
+@@ -1047,6 +1079,50 @@ final class SideUiCoordinatorImpl
+         }
+     }
+ 
++    private boolean isSidePanelOverlay() {
++        return isSidePanelOverlay(
++                getWindowWidth(), ViewUtils.dpToPx(mParentActivity, MIN_WEB_CONTENTS_WIDTH_DP));
++    }
++
++    private boolean isSidePanelOverlay(@Px int windowWidth, @Px int minWebContentsWidth) {
++        return windowWidth - minWebContentsWidth
++                < ViewUtils.dpToPx(mParentActivity, SIDE_PANEL_OVERLAY_BELOW_AVAILABLE_WIDTH_DP);
++    }
++
++    /** BEX: 重ね表示のサイドパネルはページの幅を削らないので、ウィンドウ幅いっぱいまで使える。 */
++    private @Px int getAvailableWidthFor(
++            SideUiContainer container,
++            @Px int availableWidth,
++            @Px int windowWidth,
++            @Px int minWebContentsWidth) {
++        boolean isOverlaidSidePanel =
++                container.getSideUiId() == SideUiId.SIDE_PANEL
++                        && isSidePanelOverlay(windowWidth, minWebContentsWidth);
++        return isOverlaidSidePanel ? windowWidth : availableWidth;
++    }
++
++    /**
++     * BEX: {@link SideUiObserver} や外部の問い合わせに見せる {@link SideUiSpecs} を返す。
++     *
++     * <p>オブザーバーはここで渡した幅のぶんだけページやツールバーを縮める。重ね表示の
++     * あいだはサイドパネルの幅を 0 に見せて、ページを縮めさせない。
++     */
++    private SideUiSpecs toObserverSpecs(SideUiSpecs specs) {
++        var sidePanel = getSideUiContainerById(SideUiId.SIDE_PANEL);
++        if (sidePanel == null || !isSidePanelOverlay()) return specs;
++
++        Map<@AnchorSide Integer, SideUiSize> observerSpecs = new ArrayMap<>();
++        for (Map.Entry<@AnchorSide Integer, SideUiSize> entry : specs.entrySet()) {
++            boolean isSidePanelSide = entry.getKey() == sidePanel.getAnchorSide();
++            observerSpecs.put(
++                    entry.getKey(),
++                    isSidePanelSide
++                            ? new SideUiSize(0, HeightType.NOT_APPLICABLE)
++                            : entry.getValue());
++        }
++        return new SideUiSpecs(observerSpecs);
++    }
++
+     private @Px int getWindowWidth() {
+         return WindowMetricsCalculator.getOrCreate()
+                 .computeCurrentWindowMetrics(mParentActivity)

@@ -57,3 +57,13 @@ Chrome / Chromium とは別のアプリとして共存します。
 
 自分でビルドする手順、当てているパッチの一覧、開発の記録は
 [docs/](docs/README.md) にあります。
+
+## テスト
+
+リポジトリ内の Python スクリプトの単体テストは [pytest](https://docs.pytest.org/) で
+実行します（Chromium 本体のビルドは不要）。
+
+```bash
+python3 -m pip install pytest
+python3 -m pytest
+```

@@ -11,6 +11,7 @@ Preferences*.json
 bex-screen*.png
 bex-test-*.zip
 __pycache__/
+.pytest_cache/
 .work/
 
 # 動作確認用に撮った画面のキャプチャ・録画。端末の画面がそのまま写るので

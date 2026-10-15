@@ -8,7 +8,7 @@ Chromium Android に拡張機能サポートを追加するためのパッチ群
 patches/
 ├── phase1/    # 空: PoC はパッチ不要だった（下記参照）
 ├── phase2/    # 空: API 検証もパッチ不要だった
-└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜47）
+└── phase3/    # UX最適化: ツールバー・ポップアップ・sidePanel・omnibox 等（01〜48）
 ```
 
 ## Phase 1 / Phase 2 について
@@ -57,6 +57,7 @@ Content Script 注入、権限UI、主要API）が動作することが判明し
 | 45 | `45-update-menu-product-name.patch` | 更新の案内の製品名を BEX にする（「Chrome を更新」→「BEX を更新」） |
 | 46 | `46-extension-action-null-guards.patch` | 拡張機能アクションの null 参照でブラウザが落ちるのを防ぐ |
 | 47 | `47-sidepanel-overlay-narrow-window.patch` | 幅の狭いウィンドウ（スマホの縦画面）ではサイドパネルをページに重ねて出す |
+| 48 | `48-popup-autosize-ceil.patch` | 拡張機能ポップアップを開くたびにスクロールバーが一瞬出るのを直す（自動リサイズの端数を切り上げる） |
 
 ### 欠番について
 
@@ -125,7 +126,7 @@ out/MobileBex/bin/run_chrome_junit_tests -f "*ExtensionBottomSheet*"
 # Phase 3 パッチを適用（デフォルト。phase1/2 は空なのでスキップされる）
 ./scripts/apply-patches.sh
 
-# パッチを元に戻す（47→01 の逆順で剥がされる）
+# パッチを元に戻す（48→01 の逆順で剥がされる）
 ./scripts/apply-patches.sh --reverse
 ```
 

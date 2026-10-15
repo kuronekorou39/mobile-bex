@@ -1,0 +1,50 @@
+# Patch 48: 拡張機能ポップアップを開くたびにスクロールバーが一瞬出るのを直す
+# ポップアップの大きさは Blink の自動リサイズ (FrameViewAutoSizeInfo) が中身から
+# 決める。ここは物理ピクセルで計算していて、中身の幅・高さを ToInt() で切り捨てて
+# いた (上流にも crbug.com/812311 の TODO が残っている)。
+#
+# Pixel 9a は倍率が 2.625 なので、幅 380 の中身は 997.5px、高さ 334 は 876.75px に
+# なる。切り捨てると枠は 997x876px になり、中身が 1px 弱はみ出す。Android は見える
+# 範囲 (visual viewport) がこのわずかなはみ出しでスクロール可能になったとみなし、
+# 表示した瞬間に縦横のスクロールバーを光らせていた。デスクトップはこの経路で
+# スクロールバーを出さないので目立たない。
+#
+# 実機で確認したこと (v0.3.3 / Parallel Stream のポップアップ):
+#   - 18 回の開閉を録画し、17 回で開いてから約 0.28 秒後に縦横のスクロールバーが
+#     約 0.1 秒出ていた (残り 1 回は録画開始時点で開いていた)
+#   - ポップアップのウィンドウとビューは 998x877px で正しいのに、ページからは
+#     innerWidth 380 に対して visualViewport.width 379.81 (=997/2.625)、
+#     scrollHeight 334 に対して clientHeight 333 に見えていた
+#
+# 切り上げに変えたあと同じ 18 回の開閉を録画し、スクロールバーは 0 回になった。
+#
+# 残っている別の問題: ポップアップの右端・下端に 1〜2px の白い線が出る (ときどき
+# 点いたり消えたりする)。ウィンドウ背景の白で、ウィンドウが中身より少し大きい
+# ために見えている。ブラウザ側が DIP を切り上げて Java に渡し、Java がそれを
+# さらに px に丸めるので、ウィンドウ 1000x879px に対して中身は 998x877px 前後に
+# なる。このパッチでは扱っていない。
+diff --git a/third_party/blink/renderer/core/frame/frame_view_auto_size_info.cc b/third_party/blink/renderer/core/frame/frame_view_auto_size_info.cc
+index c96fea4..48a49a1 100644
+--- a/third_party/blink/renderer/core/frame/frame_view_auto_size_info.cc
++++ b/third_party/blink/renderer/core/frame/frame_view_auto_size_info.cc
+@@ -117,10 +117,16 @@ bool FrameViewAutoSizeInfo::AutoSizeIfNeeded(bool should_reset_for_content) {
+   // TODO(bokan): This code doesn't handle subpixel sizes correctly. Because
+   // of that, it's forced to maintain all the special ScrollbarMode code
+   // below. https://crbug.com/812311.
+-  int width = uses_scroll_width ? document_layout_box->ScrollWidth().ToInt()
+-                                : layout_view->ComputeMinimumWidth().ToInt();
+-
+-  int height = document_layout_box->ScrollHeight().ToInt();
++  //
++  // BEX: 端数は切り上げる。ここは物理ピクセルなので、倍率が整数でない端末
++  // (Pixel 9a は 2.625) では幅 380 の中身が 997.5px になる。切り捨てると枠が
++  // 中身より 1px 弱小さくなり、Android は見える範囲 (visual viewport) が
++  // スクロール可能になったとみなして、拡張機能のポップアップを開くたびに
++  // 縦横のスクロールバーを一瞬表示していた。
++  int width = uses_scroll_width ? document_layout_box->ScrollWidth().Ceil()
++                                : layout_view->ComputeMinimumWidth().Ceil();
++
++  int height = document_layout_box->ScrollHeight().Ceil();
+   gfx::Size new_size(width, height);
+ 
+   const bool uses_overlay_scrollbars =
